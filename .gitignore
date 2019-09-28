@@ -4,7 +4,13 @@
 *.sym
 *.sav
 *.o
+*.chrgb
+*.chr1
+*.pb8
+*.pb16
 *.iu
 obj/gb/*.z80
 __pycache__
 zip.in
+ca83/tools/pb8
+/little-things-gb.zip
