@@ -1,0 +1,6 @@
+0.02 (2018-12-29)
+* Less "cheeky", more informative failure message
+* Add test results
+
+0.01 (2018-11-10)
+* Initial release

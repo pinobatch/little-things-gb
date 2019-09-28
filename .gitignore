@@ -1,0 +1,10 @@
+*.gb
+*.gb.png
+*.map
+*.sym
+*.sav
+*.o
+*.iu
+obj/gb/*.z80
+__pycache__
+zip.in

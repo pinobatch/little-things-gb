@@ -1,0 +1,48 @@
+.include "sm83isa.mac"
+.include "hardware.inc"
+.include "global.inc"
+
+SameBoyLogo_dst = $8080
+SameBoyLogo_length = (128 * 24) / 64
+
+;;
+; Unpacks data compressed using PB8, a form of RLE with unary-coded
+; run lengths.  Each block representing 8 bytes consists of a control
+; byte, where each bit (MSB to LSB) is 0 for literal or 1 for repeat
+; previous, followed by the literals in that block.
+; The unpacker skips a byte after each, implying colors 0 and 1.
+; @param HL source address (pb8 format)
+; @param DE destination address
+.proc pb8_unpack
+  ; Register map for PB8 decompression
+  ; HL: source address in boot ROM
+  ; DE: destination address in VRAM
+  ; A: Current literal value
+  ; B: Repeat bits, terminated by 1000...
+  ; C: Number of 8-byte blocks left in this block
+  ; Source address in HL lets the repeat bits go straight to B,
+  ; bypassing A and avoiding spilling registers to the stack.
+  ld b, [hl]
+  inc hl
+
+  ; Shift a 1 into lower bit of shift value.  Once this bit
+  ; reaches the carry, B becomes 0 and the byte is over
+  scf
+  rl b
+
+  bitloop:
+    ; If not a repeat, load a literal byte
+    jr c, is_repeat
+      ld a, [hli]
+    is_repeat:
+    ; Decompressed data uses colors 0 and 1, so write once, inc twice
+    ld [de], a
+    inc de
+    inc de
+    sla b
+    jr nz, bitloop
+
+  dec c
+  jr nz, pb8_unpack
+  ret
+.endproc

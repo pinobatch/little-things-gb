@@ -1,0 +1,84 @@
+.macpack sm83isa
+.include "hardware.inc"
+.include "global.inc"
+
+LF = $0A
+
+.code
+
+.proc main
+  ei
+
+  ; Clear video memory
+  ld de, $8000
+  ld h, e
+  ld bc, $1800
+  call memset
+  ld b, $04
+  ld h, $40
+  call memset
+
+  ; Load the font
+  ld hl, font_pb8
+  ld de, $8400
+  ld c, 192
+  call pb8_unpack
+
+  ; Write some text
+  ld de, _SCRN0+1*64+1
+  ld hl, hello_msg
+  call puts_multiline
+
+  ld a, %00001100
+  ldh [rBGP], a
+  ld a, LCDCF_ON|LCDCF_WINOFF|LCDCF_BG8000|LCDCF_BG9800|LCDCF_OBJOFF|LCDCF_BGON
+  ldh [vblank_lcdc_value], a
+  ldh [rLCDC], a
+
+:
+  rst wait_vblank_irq
+  jr :-
+.endproc
+
+.proc puts_multiline
+  ld a, [hl]
+  add a
+  ret z
+  inc hl
+  cp LF*2
+  jr z, is_newline
+
+  ; write this character's glyph to tilemap
+  ld [de], a
+  set 5, e
+  inc a
+  ld [de], a
+  res 5, e
+  inc e
+  ; Move to next character cell
+  ld a, e
+  and $1F
+  cp 20
+  jr c, puts_multiline
+is_newline:
+  ; Move to last byte on line then next byte
+  ld a, e
+  or $3F
+  add 2
+  ld e, a
+  adc d
+  sub e
+  ld d, a
+  jr puts_multiline
+.endproc
+
+
+.rodata
+font_pb8:
+  .incbin "obj/gb/gsmplay8x15-16.chr1.pb8"
+
+hello_msg:
+  .byte "You expected ca65", LF
+  .byte "to assemble 6502", LF
+  .byte "code, but it was", LF
+  .byte "me, Dio!", 0

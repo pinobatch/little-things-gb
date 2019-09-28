@@ -1,0 +1,487 @@
+include "src/hardware.inc"
+include "src/global.inc"
+
+BLANK_TILE = $DE
+
+section "mainvars", WRAM0
+keys_pressed_so_far: ds 1
+camera_y: ds 1
+camera_y_target: ds 1
+
+joypad_irq_keys: ds 1
+joypad_irq_ly: ds 1
+
+lymin: ds 1
+lymax: ds 1
+
+section "main", ROM0
+
+timer_handler::
+serial_handler::
+  reti
+
+main::
+  ; Set up vblank handler
+  call lcd_off
+  ld a,IEF_VBLANK
+  ldh [rIE],a  ; enable IRQs
+  xor a
+  ldh [rIF],a  ; Acknowledge any pending IRQs
+  ld [nmis],a
+  ld [cur_keys],a
+  ld [joypad_irq_keys],a
+  ld [joypad_irq_ly],a
+  ei
+
+  ; First key is pressed at the title screen
+  call load_title_bg
+
+  ld a,%11100100
+  ldh [rBGP],a
+  ld a,%01010100
+  ldh [rOBP0],a
+  xor a
+  ldh [rSCX],a
+  ldh [rSCY],a
+  ld a,LCDCF_ON|LCDCF_BGON|LCDCF_BG8000|LCDCF_BG9800
+  ld [vblank_lcdc_value],a
+  ldh [rLCDC],a
+  .titleloop:
+    call wait_vblank_irq
+    call setup_joypad_handler_if_no_keys
+    ld a,[joypad_irq_keys]
+    or a
+    jr z,.titleloop
+  ld [keys_pressed_so_far],a
+  ld a,[joypad_irq_ly]
+  ld [lymin],a
+  ld [lymax],a
+
+  call load_main_bg
+  ld a,LCDCF_ON|LCDCF_BGON|LCDCF_BG8800|LCDCF_BG9800|LCDCF_WINON|LCDCF_WIN9C00
+  ldh [rLCDC],a
+  or a,LCDCF_OBJON
+  ld [vblank_lcdc_value],a
+
+  ld a,152+8
+  ld [SOAM+1],a
+  xor a
+  ld [SOAM+3],a
+  ld a,$DF  ; arrow tile
+  ld [SOAM+2],a
+  ld a,4
+  ld [oam_used],a
+  call lcd_clear_oam
+  .mainloop:
+    ld a,[joypad_irq_ly]
+    add 12
+    ld [SOAM+0],a
+
+    call wait_vblank_irq
+    call erase_newest_key
+
+    ; when using joypad, serial, or timer interrupt, you need to
+    ; protect OAM DMA's wait routine from interrupts
+    di
+    call run_dma
+    ei
+    
+    ; Was a new key pressed? If so, advance the target
+    ld a,[joypad_irq_keys]
+    ld b,a
+    ld a,[keys_pressed_so_far]
+    ld c,a
+    cpl
+    and b
+    jr z,.not_new_key
+      or c
+      ld [keys_pressed_so_far],a
+      ld a,[camera_y_target]
+      add 16
+      ld [camera_y_target],a
+      xor a
+      ld [joypad_irq_keys],a
+
+      ; Calculate bitwise minimum and maximum of keypresses
+      ld a,[joypad_irq_ly]
+      ld b,a
+      ld a,[lymin]
+      and b
+      ld [lymin],a
+      ld a,[lymax]
+      or b
+      ld [lymax],a
+
+    .not_new_key:
+
+    call update_chat_y_scroll
+    call setup_joypad_handler_if_no_keys
+
+    ; If they're all pressed, finish
+    ld a,[keys_pressed_so_far]
+    inc a
+    jr nz,.mainloop
+
+  ; Count bits of difference between bitwise minimum and maximum
+  ; as an estimate of entropy.
+  ld a,[lymin]
+  ld b,a
+  ld a,[lymax]
+  xor b  ; A: all bits that differed among LY samples
+  ld b,0
+  .popcntloop:
+    add a
+    jr nc,.popcnt_no_inc
+      inc b
+    .popcnt_no_inc:
+    jr nz,.popcntloop
+
+  ; Fewer than 5 bits of entropy means it's probably being polled
+  ; at the same scanline every time <cough>mGBA</cough>
+  ld a,b
+  cp 5
+  jp c,fail_freeze
+
+  ; Final animation
+  ld c,120
+  .aniloop1:
+    call wait_vblank_irq
+    call update_chat_y_scroll
+    dec c
+    jr nz,.aniloop1
+
+  ld c,128
+  .aniloop2:
+    ld a,c
+    ldh [rWY],a
+    call wait_vblank_irq
+    inc c
+    jr nz,.aniloop2
+
+  jp pass_freeze
+
+erase_newest_key:
+  ; Find where to draw the mark for this key
+  ld hl,keypad_key_x-1
+  ld a,[joypad_irq_keys]
+  or a
+  ret z
+  .findloop:
+    inc hl
+    rra
+    jr nc,.findloop
+  ld l,[hl]
+  ld h,high(_SCRN1)
+
+  ; And draw it
+  ld a,BLANK_TILE
+  ld [hl+],a
+  ld [hl-],a
+  set 5,l
+  ld [hl+],a
+  ld [hl-],a
+  ret
+
+keypad_key_x: db 16, 14, 10, 12, 8, 2, 6, 4
+
+update_chat_y_scroll:
+  ld a,[camera_y_target]
+  ld b,a
+  ld a,[camera_y]
+  cp b
+  jr z,.no_update_scroll
+    inc a
+    ld [camera_y],a
+  .no_update_scroll:
+  ldh [rSCY],a
+  ret
+
+
+; Joypad IRQ handler ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;
+; To use joypad_handler, clear rP1 to 0 and enable IEF_HILO in rIE.
+; If cur_keys has exactly one bit set, key_LY will be set to a value
+; between 0 and 153.
+joypad_handler::
+  push af
+  push bc
+
+  ; Read the controller and count pressed keys.
+  call read_pad  ; returns cur_keys in both A and B
+  or a  ; If zero keys pressed, ignore.
+  jr z,.reenable_listening
+  ld b,a
+  dec a
+  and b  ; if A & (A - 1) is nonzero, then A has more than 1 bit set
+  jr z,.save_this_key
+  .reenable_listening:
+    xor a
+    ld [rP1],a  ; restore listen-for-everything state
+    jr .no_save
+  .save_this_key:
+    ; Save this key as being pressed
+    ld a,b
+    ld [joypad_irq_keys],a
+    ldh a,[rLY]
+    ld [joypad_irq_ly],a
+
+    ; And disable further interrupts
+    ldh a,[rIE]
+    and ~IEF_HILO
+    ldh [rIE],a
+  .no_save:
+
+  pop bc
+  pop af
+  reti
+
+setup_joypad_handler_if_no_keys:
+  ; If already set up, don't set up
+  ld a,[rIE]
+  and IEF_HILO
+  ret nz
+
+  ; If keys are pressed, don't set up
+  call read_pad
+  ld a,[cur_keys]
+  or a
+  ret nz
+  ; fall through
+setup_joypad_handler:
+  xor a
+  ld [joypad_irq_keys],a
+  ldh [rP1],a
+  di
+  ldh a,[rIE]
+  or IEF_HILO
+  ldh [rIE],a
+  ldh a,[rIF]
+  and ~IEF_HILO
+  ldh [rIF],a
+  reti
+
+
+; Image loading ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+load_title_bg:
+  ; Load the conversation image
+  call lcd_off
+  ld de,_SCRN0
+  ld h,$02  ; blank tile
+  ld bc,32*18
+  call memset
+  ld hl,CHRRAM0
+  ld de,title_chr
+  ld b,106
+  call pb16_unpack_block
+  ld bc,20*256+11
+  ld de,_SCRN0+32*4+0
+  ld hl,title_nam
+  call load_pb16_nam
+  ret
+
+load_main_bg:
+  ; Load the conversation image
+  call lcd_off
+  ld de,_SCRN0
+  ld h,$00  ; blank tile
+  ld bc,32*(32+18)  ; clear both main and window
+  call memset
+  ld hl,CHRRAM2
+  ld de,convo_chr
+  ld b,119
+  call pb16_unpack_block
+  ld bc,20*256+18
+  ld de,_SCRN0+32*0+0
+  ld hl,convo_nam
+  call load_pb16_nam
+
+  ; Load the button tiles
+  ld hl,CHRRAM0+BLANK_TILE*16
+  ld de,botones_chr
+  ld bc,$FF*256+34
+  call unpack1bit
+  ; Load the button tilemap into the window
+  ld hl,_SCRN1
+  ld a,BLANK_TILE
+  ld c,32*2
+  call memset_tiny
+  ld hl,_SCRN1+2
+  ld a,$E0  ; first actual button tile
+  ld de,16
+  ld c,e
+  call memset_inc
+  add hl,de
+  ld c,e
+  call memset_inc
+
+  ; Display the graphic
+  ld a,%11100100
+  ldh [rBGP],a
+  xor a
+  ldh [rSCX],a
+  ld a,256 - 7 * 16
+  ld [camera_y],a
+  ld [camera_y_target],a
+  ldh [rSCY],a
+  ld a,7
+  ldh [rWX],a
+  ld a,128
+  ldh [rWY],a
+  ret
+
+
+fail_freeze:
+  ; Load the image
+  call lcd_off
+  ld de,_SCRN0
+  ld h,$10  ; blank tile
+  ld bc,32*18
+  call memset
+  ld hl,CHRRAM0
+  ld de,YES_chr
+  ld b,86
+  call pb16_unpack_block
+  ld bc,18*256+8
+  ld de,_SCRN0+32*5+1
+  ld hl,YES_nam
+  call load_pb16_nam
+  ld a,%11100100
+  jr freeze
+
+pass_freeze:
+  ; Load the image
+  call lcd_off
+  ld de,_SCRN0
+  ld h,$00  ; blank tile
+  ld bc,32*18
+  call memset
+  ld hl,CHRRAM0
+  ld de,pass_chr
+  ld b,66
+  call pb16_unpack_block
+  ld bc,16*256+6
+  ld de,_SCRN0+32*6+2
+  ld hl,pass_nam
+  call load_pb16_nam
+  ld a,%11100100
+  ; jp freeze
+
+freeze:
+  ldh [rBGP],a
+  xor a
+  ldh [rSCX],a
+  ldh [rSCY],a
+  ld a,LCDCF_ON|LCDCF_BGON|LCDCF_BG8000|LCDCF_BG9800
+  ld [vblank_lcdc_value],a
+  ldh [rLCDC],a
+.forever:
+  halt
+  jr .forever
+
+;;
+; @param B width of map
+; @param C height of map
+; @param DE map destination in VRAM (_SCRN0+32*Y+X)
+; @param HL map compressed data source
+; @param A palette (BGP)
+load_pb16_nam:
+  push de
+  push hl
+  push bc
+  push af  ; Stack now: destination, source, map size, palette
+  call lcd_off
+  pop af  ; Stack now: destination, source
+  ldh [rBGP],a
+
+  ; calculate how much to decompress  
+  pop bc
+  pop de
+  push bc  ; Stack now: destination, map size
+  ld a,b
+  ld b,0
+  ld h,b
+  ld l,b
+  scf
+  adc a  ; C:A = height * 2 + 1; DE = width
+  .mulloop:
+    jr nc,.mulnoadd
+      add hl,bc
+    .mulnoadd:
+    add hl,hl
+    add a
+    jr nz,.mulloop
+  ; Now, HL = 2 * w * h
+  add hl,hl
+  add hl,hl
+  add hl,hl  ; HL = 16 * w * h
+  ld c,240
+  add hl,bc
+  ld b,h  ; B = (w * h) / 16 rounded up
+
+  ; Decompress that much to the unused 14 bottom rows of _SCRN1
+  ld hl,_SCRN1+32*18
+  push hl  ; Stack now: decompressed source, destination, map size
+  call pb16_unpack_block
+  pop hl
+
+  ; And copy it to the screen
+  pop bc
+  pop de
+  jp load_nam
+
+;;
+; Unpacks C 1bpp tiles from DE to HL
+; @param B $00 for colors 0 and 1 or $FF for colors 0 and 3
+; @param C tile count (limit 128)
+; @param DE source address
+; @param HL destination address
+unpack1bit::
+  sla c
+.loop:
+  rept 4
+    ld a,[de]
+    inc de
+    ld [hl+],a
+    and b
+    ld [hl+],a
+  endr
+  dec c
+  jr nz,.loop
+  ret
+
+YES_chr:
+  incbin "obj/gb/youremulatorsucks.u.chrgb.pb16"
+YES_nam:
+  incbin "obj/gb/youremulatorsucks.nam.pb16"
+title_chr:
+  incbin "obj/gb/title.u.chrgb.pb16"
+title_nam:
+  incbin "obj/gb/title.nam.pb16"
+convo_chr:
+  incbin "obj/gb/convo.u.chrgb.pb16"
+convo_nam:
+  incbin "obj/gb/convo.nam.pb16"
+pass_chr:
+  incbin "obj/gb/pass.u.chrgb.pb16"
+pass_nam:
+  incbin "obj/gb/pass.nam.pb16"
+botones_chr:
+  db %11111111
+  db %11111111
+  db %11111111
+  db %11111111
+  db %11111111
+  db %11111111
+  db %11111111
+  db %11111111
+
+  db %00010000
+  db %00110000
+  db %01110000
+  db %11111111
+  db %11111111
+  db %01110000
+  db %00110000
+  db %00010000
+  incbin "obj/gb/botones.chr1"

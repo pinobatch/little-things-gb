@@ -1,0 +1,274 @@
+.include "sm83isa.mac"
+.include "hardware.inc"
+.include "global.inc"
+
+memset_tiny = <memset_tiny_impl
+memset_inc = <memset_inc_impl
+wait_vblank_irq = <wait_vblank_irq_impl
+
+.import __HRAMCODE_LOAD__, __HRAMCODE_RUN__, __HRAMCODE_SIZE__
+
+.macro padto endaddr
+  .res padto_base + endaddr - *
+.endmacro
+
+.bss
+.align 256
+SOAM: .res 160
+oam_used: .res 1
+
+; 31 bytes for other variables that aren't hot enough to go in HRAM
+
+.align 2
+STACK_SIZE = 64
+stack_top: .res STACK_SIZE
+
+.segment "HRAM"
+nmis: .res 1
+vblank_lcdc_value: .res 1
+
+
+.segment "LOWROM00"
+padto_base = *
+
+; RST $08: memset_tiny
+padto $08
+.proc memset_tiny_impl
+  ld [hl+], a
+  dec c
+  jr nz, memset_tiny_impl
+  ret
+.endproc
+
+padto $10
+.proc memset_inc_impl
+  ld [hl+], a
+  inc a
+  dec c
+  jr nz,memset_inc_impl
+  ret
+.endproc
+
+padto $18
+.proc wait_vblank_irq_impl
+  ld hl, nmis
+  ld a, [hl]
+  jr wait_vblank_irq_tail
+.endproc
+
+padto $40  ; vblank handler
+  push af
+  ldh a,[vblank_lcdc_value]
+  ldh [rLCDC],a
+  jr vblank_tail
+
+; Past all RST and interrupt handlers, we have their tail sections
+padto $68
+.proc wait_vblank_irq_tail
+  halt
+  cp [hl]
+  jr z, wait_vblank_irq_tail
+  ret
+.endproc
+
+.proc vblank_tail
+  ldh a,[nmis]
+  inc a
+  ldh [nmis],a
+  pop af
+  reti
+.endproc
+
+; Fill the rest of space below $100 with common routines for
+; PPU interfacing
+
+clear_scrn0_to_0:
+  ld h, 0
+  ; fall through
+clear_scrn0_to_h:
+  ld de,_SCRN0
+  ld bc,32*32
+  ; fall through
+
+;;
+; Writes BC bytes of value H starting at DE.
+.proc memset
+  ; Increment B if C is nonzero
+  dec bc
+  inc b
+  inc c
+
+  ld a, h
+  loop:
+    ld [de], a
+    inc de
+    dec c
+    jr nz, loop
+    dec b
+    jr nz, loop
+  ret
+.endproc
+
+;;
+; Copies BC bytes from HL to DE.
+; @return A: last byte copied; HL at end of source;
+; DE at end of destination; B=C=0
+.proc memcpy
+  ; Increment B if C is nonzero
+  dec bc
+  inc b
+  inc c
+
+  loop:
+    ld a, [hl+]
+    ld [de],a
+    inc de
+    dec c
+    jr nz, loop
+    dec b
+    jr nz, loop
+  ret
+.endproc
+
+;;
+; Waits for forced blank (rLCDC bit 7 clear) or vertical blank
+; (rLY >= 144).  Use before VRAM upload or before clearing rLCDC
+; bit 7.  Once interrupts are up and running, wait_vblank_irq
+; should be used instead.
+.proc busy_wait_vblank
+  ; If rLCDC bit 7 already clear, we're already in forced blanking
+  ldh a, [rLCDC]
+  add a
+  ret nc
+
+  ; Otherwise, wait for rLCDC to become 144 (not 145) because rLY=0
+  ; represents both the prerender line and the first visible line.
+  ; This differs from Super NES, where the first visible line is 1,
+  ; and NES, which has a post-render line numbered 240 between
+  ; picture and vblank.
+  wait:
+    ldh a, [rLY]
+    cp 144
+    jr c,  wait
+  ret
+.endproc
+
+;;
+; Waits for vertical blanking and then turns off rendering.
+; This is necessary on Game Boy because of how the LCD driver works.
+.proc lcd_off
+  call busy_wait_vblank
+
+  ; Use a RMW instruction to turn off only bit 7
+  ld hl, rLCDC
+  res 7, [hl]
+  ret
+.endproc
+
+;;
+; Moves sprites in the display list from SOAM+[oam_used] through
+; SOAM+$9C offscreen by setting their Y coordinate to 0, which is
+; completely above the screen top (16).
+.proc lcd_clear_oam
+  ; Destination address in shadow OAM
+  ld hl, oam_used
+  ld a, [hl]
+  and $FC
+  ld l, a
+
+  ; iteration count
+  rrca
+  rrca
+  add 256 - 40
+  ld c, a
+
+  xor a
+  rowloop:
+    ld [hl+],a
+    inc l
+    inc l
+    inc l
+    inc c
+    jr nz, rowloop
+  ret
+.endproc
+
+;;
+; Copies a 20 column by 10 row tilemap from HL to screen at DE.
+.proc load_full_nam
+  ld bc,256*20+18
+  ; fallthrough
+.endproc
+;;
+; Copies a B column by C row tilemap from HL to screen at DE.
+.proc load_nam
+  push bc
+  push de
+  byteloop:
+    ld a,[hl+]
+    ld [de],a
+    inc de
+    dec b
+    jr nz, byteloop
+
+  ; Move to next screen row
+  pop de
+  ld a, 32
+  add e
+  ld e, a
+  jr nc, :+
+    inc d
+  :
+
+  ; Restore width; do more rows remain?
+  pop bc
+  dec c
+  jr nz, load_nam
+  ret
+.endproc
+
+.segment "LOWROM01"
+  nop
+  jp start
+  .res $4C, $00  ; rgbfix or gbheader puts a header here
+
+; Now fill $150-$1FF with init code and common routines
+
+start:
+  di
+  ld sp, stack_top + STACK_SIZE  ; Set up stack pointer (full descending)
+  call lcd_off
+  xor a
+  ldh [nmis],a
+  ldh [rSCY], a   ; clear scroll
+  ldh [rSCX], a   ; clear scroll
+  ldh [rNR52], a  ; disable (and reset) audio
+
+  ld hl,SOAM
+  ld c,160
+  rst memset_tiny
+
+  ld a, $80
+  ldh [vblank_lcdc_value], a
+
+  ; Copy the sprite DMA routine to HRAM
+  ld hl, __HRAMCODE_LOAD__
+  ld de, __HRAMCODE_RUN__
+  ld bc, __HRAMCODE_SIZE__
+  call memcpy
+
+  ; Repeat with DATA and RAMCODE if your program uses them
+
+  jp main
+
+.segment "HRAMCODE"
+.proc run_dma
+  ld a, >SOAM
+  ldh [rDMA], a
+  ld a,40
+  waitloop:
+    dec a
+    jr nz, waitloop
+  ret
+.endproc
+

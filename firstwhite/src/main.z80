@@ -1,0 +1,70 @@
+include "src/hardware.inc"
+include "src/global.inc"
+
+section "mainvars", WRAM0
+;cur_level: ds 1
+
+section "main", ROM0
+
+timer_handler::
+serial_handler::
+joypad_handler::
+  reti
+
+main::
+  ; Set up vblank handler
+  call lcd_off
+  ld a,IEF_VBLANK
+  ldh [rIE],a  ; enable IRQs
+  xor a
+  ldh [rIF],a  ; Acknowledge any pending IRQs
+  ld [nmis],a
+  ei
+
+  ; Load the image
+  ld de,_SCRN0
+  ld h,45  ; blank tile
+  ld bc,32*18
+  call memset
+  ld hl,CHRRAM0
+  ld de,YES_chr
+  ld b,98
+  call pb16_unpack_block
+  ld hl,_SCRN0+640
+  ld de,YES_nam
+  push hl
+  ld bc,17*8/16+1
+  call pb16_unpack_block
+  pop hl
+  ld bc,17*256+8
+  ld de,_SCRN0+32*5+2
+  call load_nam
+
+.forever:
+  ; Display for one frame
+  ld a,%11100100
+  ldh [rBGP],a
+  xor a
+  ldh [rSCX],a
+  ldh [rSCY],a
+  ld a,LCDCF_ON|LCDCF_BGON|LCDCF_BG8000|LCDCF_BG9800
+  ld [vblank_lcdc_value],a
+  ldh [rLCDC],a
+  ; now we're at line 0
+  call wait_vblank_irq
+
+  ; now we're at line 144. Turn off display and busy wait roughly a frame
+  xor a
+  ldh [rLCDC],a
+  ld bc,65536-20000/4
+  .delayloop:
+    inc c
+    jr nz,.delayloop
+    inc b
+    jr nz,.delayloop
+  jr .forever
+
+YES_chr:
+  incbin "obj/gb/youremulatorsucks.u.chrgb.pb16"
+YES_nam:
+  incbin "obj/gb/youremulatorsucks.nam.pb16"

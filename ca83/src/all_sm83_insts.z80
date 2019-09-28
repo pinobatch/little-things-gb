@@ -1,0 +1,864 @@
+.include "sm83isa.mac"
+
+.code
+
+precedingglobalsymbol:
+
+  ; Group 0 instructions ($00-$3F)
+
+  ; $00-$07
+  nop
+  ld bc, $1010
+  ld [bc], a
+  inc bc
+  inc b
+  dec b
+  ld b, $60
+  rlca
+  
+  ; $08-$0F
+  ld [$8080], sp
+  add hl, bc
+  ld a, [bc]
+  dec bc
+  inc c
+  dec c
+  ld c, $E0
+  rrca
+
+  ; $10-$17
+  stop
+  ld de, $1111
+  ld [de], a
+  inc de
+  inc d
+  dec d
+  ld d, $61
+  rla
+  
+  ; $18-$1F
+  jr *+2+$81-$100
+  add hl, de
+  ld a, [de]
+  dec de
+  inc e
+  dec e
+  ld e, $E1
+  rra
+
+  ; $20-$27
+  jr nz, *+2+$02
+  ld hl, $1212
+  ld [hl+], a
+  inc hl
+  inc h
+  dec h
+  ld h, $62
+  daa
+  
+  ; $28-$2F
+  jr z, *+2+$82-$100
+  add hl, hl
+  ld a, [hl+]
+  dec hl
+  inc l
+  dec l
+  ld l, $E2
+  cpl
+
+  ; $30-$37
+  jr nc, *+2+$03
+  ld sp, $1313
+  ld [hl-], a
+  inc sp
+  inc [hl]
+  dec [hl]
+  ld [hl], $63
+  scf
+  
+  ; $38-$3F
+  jr c, *+2+$83-$100
+  add hl, sp
+  ld a, [hl-]
+  dec sp
+  inc a
+  dec a
+  ld a, $E3
+  ccf
+
+  ; Reg-reg moves
+
+  ; $40-$47
+  ld b, b
+  ld b, c
+  ld b, d
+  ld b, e
+  ld b, h
+  ld b, l
+  ld b, [hl]
+  ld b, a
+
+  ; $48-$4F
+  ld c, b
+  ld c, c
+  ld c, d
+  ld c, e
+  ld c, h
+  ld c, l
+  ld c, [hl]
+  ld c, a
+
+  ; $50-$57
+  ld d, b
+  ld d, c
+  ld d, d
+  ld d, e
+  ld d, h
+  ld d, l
+  ld d, [hl]
+  ld d, a
+
+  ; $58-$5F
+  ld e, b
+  ld e, c
+  ld e, d
+  ld e, e
+  ld e, h
+  ld e, l
+  ld e, [hl]
+  ld e, a
+
+  ; $60-$67
+  ld h, b
+  ld h, c
+  ld h, d
+  ld h, e
+  ld h, h
+  ld h, l
+  ld h, [hl]
+  ld h, a
+
+  ; $68-$6F
+  ld l, b
+  ld l, c
+  ld l, d
+  ld l, e
+  ld l, h
+  ld l, l
+  ld l, [hl]
+  ld l, a
+
+  ; $70-$77
+  ld [hl], b
+  ld [hl], c
+  ld [hl], d
+  ld [hl], e
+  ld [hl], h
+  ld [hl], l
+  halt
+  ld [hl], a
+
+  ; $78-$7f
+  ld a, b
+  ld a, c
+  ld a, d
+  ld a, e
+  ld a, h
+  ld a, l
+  ld a, [hl]
+  ld a, a
+
+  ; A-reg ALU
+
+  ; $80-$87
+  add a, b
+  add a, c
+  add a, d
+  add a, e
+  add a, h
+  add a, l
+  add a, [hl]
+  add a, a
+
+  ; $88-$8F
+  adc a, b
+  adc a, c
+  adc a, d
+  adc a, e
+  adc a, h
+  adc a, l
+  adc a, [hl]
+  adc a, a
+
+  ; $90-$97
+  sub a, b
+  sub a, c
+  sub a, d
+  sub a, e
+  sub a, h
+  sub a, l
+  sub a, [hl]
+  sub a, a
+
+  ; $98-$9F
+  sbc a, b
+  sbc a, c
+  sbc a, d
+  sbc a, e
+  sbc a, h
+  sbc a, l
+  sbc a, [hl]
+  sbc a, a
+
+  ; $A0-$A7
+  and a, b
+  and a, c
+  and a, d
+  and a, e
+  and a, h
+  and a, l
+  and a, [hl]
+  and a, a
+
+  ; $A8-$AF
+  xor a, b
+  xor a, c
+  xor a, d
+  xor a, e
+  xor a, h
+  xor a, l
+  xor a, [hl]
+  xor a, a
+
+  ; $B0-$B7
+  or a, b
+  or a, c
+  or a, d
+  or a, e
+  or a, h
+  or a, l
+  or a, [hl]
+  or a, a
+
+  ; $B8-$BF
+  cp a, b
+  cp a, c
+  cp a, d
+  cp a, e
+  cp a, h
+  cp a, l
+  cp a, [hl]
+  cp a, a
+
+  ; Group 3
+
+  ; $C0-$C7
+  ret nz
+  pop bc
+  jp nz, $2C2C
+  jp $3C3C
+  call nz, $4C4C
+  push bc
+  add a, $6C
+  rst $0000
+
+  ; $C8-$CF
+  ret z
+  ret
+  jp z, $ACAC
+  res 7, h
+  call z, $CCCC
+  call $DCDC
+  adc a, $EC
+  rst $0008
+
+  ; $D0-$D7
+  ret nc
+  pop de
+  jp nc, $2D2D
+  call nc, $4D4D
+  push de
+  sub a, $6D
+  rst $0010
+
+  ; $D8-$DF
+  ret c
+  reti
+  jp c, $ADAD
+  call c, $CDCD
+  sbc a, $EC
+  rst $0018
+
+  ; $E0-$E7
+  ldh [$FF0E], a
+  pop hl
+  ld [$FF00+c], a
+  push hl
+  and a, $6E
+  rst $0020
+  
+  ; $E8-$EF
+  add sp, -24
+  jp hl
+  ld [$aeae], a
+  xor a, $EE
+  rst $0028
+
+  ; $F0-$F7
+  ldh a, [$FF0F]
+  pop af
+  ld a, [$FF00+c]
+  di
+  push af
+  or a, $6F
+  rst $0030
+
+  ; $F8-$FF
+  ld hl, sp + (-113)
+  ld sp, hl
+  ld a, [$afaf]
+  ei
+  cp a, $EF
+  rst $0038
+
+  ; Bit shifts
+
+  ; $CB00-$CB07
+  rlc b
+  rlc c
+  rlc d
+  rlc e
+  rlc h
+  rlc l
+  rlc [hl]
+  rlc a
+
+  ; $CB08-$CB0F
+  rrc b
+  rrc c
+  rrc d
+  rrc e
+  rrc h
+  rrc l
+  rrc [hl]
+  rrc a
+
+  ; $CB10-$CB17
+  rl b
+  rl c
+  rl d
+  rl e
+  rl h
+  rl l
+  rl [hl]
+  rl a
+
+  ; $CB18-$CB1F
+  rr b
+  rr c
+  rr d
+  rr e
+  rr h
+  rr l
+  rr [hl]
+  rr a
+
+  ; $CB20-$CB27
+  sla b
+  sla c
+  sla d
+  sla e
+  sla h
+  sla l
+  sla [hl]
+  sla a
+
+  ; $CB28-$CB2F
+  sra b
+  sra c
+  sra d
+  sra e
+  sra h
+  sra l
+  sra [hl]
+  sra a
+
+  ; $CB30-$CB37
+  swap b
+  swap c
+  swap d
+  swap e
+  swap h
+  swap l
+  swap [hl]
+  swap a
+
+  ; $CB38-$CB3F
+  srl b
+  srl c
+  srl d
+  srl e
+  srl h
+  srl l
+  srl [hl]
+  srl a
+
+  ; Bit test
+
+  ; $CB40-$CB47
+  bit 0, b
+  bit 0, c
+  bit 0, d
+  bit 0, e
+  bit 0, h
+  bit 0, l
+  bit 0, [hl]
+  bit 0, a
+
+  ; $CB48-$CB4F
+  bit 1, b
+  bit 1, c
+  bit 1, d
+  bit 1, e
+  bit 1, h
+  bit 1, l
+  bit 1, [hl]
+  bit 1, a
+
+  ; $CB50-$CB57
+  bit 2, b
+  bit 2, c
+  bit 2, d
+  bit 2, e
+  bit 2, h
+  bit 2, l
+  bit 2, [hl]
+  bit 2, a
+
+  ; $CB58-$CB5F
+  bit 3, b
+  bit 3, c
+  bit 3, d
+  bit 3, e
+  bit 3, h
+  bit 3, l
+  bit 3, [hl]
+  bit 3, a
+
+  ; $CB60-$CB67
+  bit 4, b
+  bit 4, c
+  bit 4, d
+  bit 4, e
+  bit 4, h
+  bit 4, l
+  bit 4, [hl]
+  bit 4, a
+
+  ; $CB68-$CB6F
+  bit 5, b
+  bit 5, c
+  bit 5, d
+  bit 5, e
+  bit 5, h
+  bit 5, l
+  bit 5, [hl]
+  bit 5, a
+
+  ; $CB70-$CB77
+  bit 6, b
+  bit 6, c
+  bit 6, d
+  bit 6, e
+  bit 6, h
+  bit 6, l
+  bit 6, [hl]
+  bit 6, a
+
+  ; $CB78-$CB7F
+  bit 7, b
+  bit 7, c
+  bit 7, d
+  bit 7, e
+  bit 7, h
+  bit 7, l
+  bit 7, [hl]
+  bit 7, a
+
+  ; Bit clear
+
+  ; $CB80-$CB87
+  res 0, b
+  res 0, c
+  res 0, d
+  res 0, e
+  res 0, h
+  res 0, l
+  res 0, [hl]
+  res 0, a
+
+  ; $CB88-$CB8F
+  res 1, b
+  res 1, c
+  res 1, d
+  res 1, e
+  res 1, h
+  res 1, l
+  res 1, [hl]
+  res 1, a
+
+  ; $CB90-$CB97
+  res 2, b
+  res 2, c
+  res 2, d
+  res 2, e
+  res 2, h
+  res 2, l
+  res 2, [hl]
+  res 2, a
+
+  ; $CB98-$CB9F
+  res 3, b
+  res 3, c
+  res 3, d
+  res 3, e
+  res 3, h
+  res 3, l
+  res 3, [hl]
+  res 3, a
+
+  ; $CBA0-$CBA7
+  res 4, b
+  res 4, c
+  res 4, d
+  res 4, e
+  res 4, h
+  res 4, l
+  res 4, [hl]
+  res 4, a
+
+  ; $CBA8-$CBAF
+  res 5, b
+  res 5, c
+  res 5, d
+  res 5, e
+  res 5, h
+  res 5, l
+  res 5, [hl]
+  res 5, a
+
+  ; $CBB0-$CBB7
+  res 6, b
+  res 6, c
+  res 6, d
+  res 6, e
+  res 6, h
+  res 6, l
+  res 6, [hl]
+  res 6, a
+
+  ; $CBB8-$CBBF
+  res 7, b
+  res 7, c
+  res 7, d
+  res 7, e
+  res 7, h
+  res 7, l
+  res 7, [hl]
+  res 7, a
+
+  ; Bit set
+  
+  ; $CBC0-$CBC7
+  set 0, b
+  set 0, c
+  set 0, d
+  set 0, e
+  set 0, h
+  set 0, l
+  set 0, [hl]
+  set 0, a
+
+  ; $CBC8-$CBCF
+  set 1, b
+  set 1, c
+  set 1, d
+  set 1, e
+  set 1, h
+  set 1, l
+  set 1, [hl]
+  set 1, a
+
+  ; $CBD0-$CBD7
+  set 2, b
+  set 2, c
+  set 2, d
+  set 2, e
+  set 2, h
+  set 2, l
+  set 2, [hl]
+  set 2, a
+
+  ; $CBD8-$CBDF
+  set 3, b
+  set 3, c
+  set 3, d
+  set 3, e
+  set 3, h
+  set 3, l
+  set 3, [hl]
+  set 3, a
+
+  ; $CBE0-$CBE7
+  set 4, b
+  set 4, c
+  set 4, d
+  set 4, e
+  set 4, h
+  set 4, l
+  set 4, [hl]
+  set 4, a
+
+  ; $CBE8-$CBEF
+  set 5, b
+  set 5, c
+  set 5, d
+  set 5, e
+  set 5, h
+  set 5, l
+  set 5, [hl]
+  set 5, a
+
+  ; $CBF0-$CBF7
+  set 6, b
+  set 6, c
+  set 6, d
+  set 6, e
+  set 6, h
+  set 6, l
+  set 6, [hl]
+  set 6, a
+
+  ; $CBF8-$CBFF
+  set 7, b
+  set 7, c
+  set 7, d
+  set 7, e
+  set 7, h
+  set 7, l
+  set 7, [hl]
+  set 7, a
+
+  ; Alternate spellings: MOV
+
+  ; $01-$02, $06, $09-$0A, $0E
+  mov bc, $1010
+  mov [bc], a
+  mov b, $60
+  mov [$8080], sp
+  mov a, [bc]
+  mov c, $E0
+
+  ; $11-$12, $16, $1A, $1E
+  mov de, $1111
+  mov [de], a
+  mov d, $61
+  mov a, [de]
+  mov e, $E1
+
+  ; $21-$22, $26, $2A, $2E
+  mov hl, $1212
+  mov [hl+], a
+  mov h, $62
+  mov a, [hl+]
+  mov l, $E2
+
+  ; $31-$32, $36, $3A, $3E
+  mov sp, $1313
+  mov [hl-], a
+  mov [hl], $63
+  mov a, [hl-]
+  mov a, $E3
+
+  ; $40-$47
+  mov b, b
+  mov b, c
+  mov b, d
+  mov b, e
+  mov b, h
+  mov b, l
+  mov b, [hl]
+  mov b, a
+
+  ; $48-$4F
+  mov c, b
+  mov c, c
+  mov c, d
+  mov c, e
+  mov c, h
+  mov c, l
+  mov c, [hl]
+  mov c, a
+
+  ; $50-$57
+  mov d, b
+  mov d, c
+  mov d, d
+  mov d, e
+  mov d, h
+  mov d, l
+  mov d, [hl]
+  mov d, a
+
+  ; $58-$5F
+  mov e, b
+  mov e, c
+  mov e, d
+  mov e, e
+  mov e, h
+  mov e, l
+  mov e, [hl]
+  mov e, a
+
+  ; $60-$67
+  mov h, b
+  mov h, c
+  mov h, d
+  mov h, e
+  mov h, h
+  mov h, l
+  mov h, [hl]
+  mov h, a
+
+  ; $68-$6F
+  mov l, b
+  mov l, c
+  mov l, d
+  mov l, e
+  mov l, h
+  mov l, l
+  mov l, [hl]
+  mov l, a
+
+  ; $70-$75, $77
+  mov [hl], b
+  mov [hl], c
+  mov [hl], d
+  mov [hl], e
+  mov [hl], h
+  mov [hl], l
+  mov [hl], a
+
+  ; $78-$7f
+  mov a, b
+  mov a, c
+  mov a, d
+  mov a, e
+  mov a, h
+  mov a, l
+  mov a, [hl]
+  mov a, a
+
+  ; $E2, $EA, $F2, $F8, $F9, $FA
+  ldh [c], a
+  mov [$ff00+c], a
+  mov [$aeae], a
+  ldh a, [c]
+  mov a, [$ff00+c]
+  mov hl, sp + (-113)
+  ld hl, sp - 113
+  mov hl, sp - 113
+  mov sp, hl
+  mov a, [$afaf]
+
+  ; Alternate spellings: ALU with implicit A
+
+  ; $80-$87
+  add b
+  add c
+  add d
+  add e
+  add h
+  add l
+  add [hl]
+  add a
+
+  ; $88-$8F
+  adc b
+  adc c
+  adc d
+  adc e
+  adc h
+  adc l
+  adc [hl]
+  adc a
+
+  ; $90-$97
+  sub b
+  sub c
+  sub d
+  sub e
+  sub h
+  sub l
+  sub [hl]
+  sub a
+
+  ; $98-$9F
+  sbc b
+  sbc c
+  sbc d
+  sbc e
+  sbc h
+  sbc l
+  sbc [hl]
+  sbc a
+
+  ; $A0-$A7
+  and b
+  and c
+  and d
+  and e
+  and h
+  and l
+  and [hl]
+  and a
+
+  ; $A8-$AF
+  xor b
+  xor c
+  xor d
+  xor e
+  xor h
+  xor l
+  xor [hl]
+  xor a
+
+  ; $B0-$B7
+  or b
+  or c
+  or d
+  or e
+  or h
+  or l
+  or [hl]
+  or a
+
+  ; $B8-$BF
+  cp b
+  cp c
+  cp d
+  cp e
+  cp h
+  cp l
+  cp [hl]
+  cp a
+
+  ; Group 3
+  add $6C
+  adc $EC
+  sub $6D
+  sbc $ED
+  and $6E
+  xor $EE
+  or $6F
+  cp $EF

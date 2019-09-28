@@ -1,0 +1,43 @@
+include "src/hardware.inc"
+include "src/global.inc"
+
+section "main_reti", ROM0
+
+; Double-colon these so that the header can see them
+timer_handler::
+serial_handler::
+joypad_handler::
+  reti
+
+section "main", ROM0
+
+main::
+  ld a,IEF_VBLANK
+  ldh [rIE],a  ; enable IRQs
+  xor a
+  ldh [rIF],a  ; acknowledge IRQs
+  ld [nmis],a
+  ei
+  ldh [rSCX],a
+  ldh [rSCY],a
+  
+  ld de,Sukey_iu
+  ld hl,CHRRAM0
+  call unpack_iu_file
+  ld hl,_SCRN0+640
+  ld de,_SCRN0
+  call load_full_nam
+
+
+  ld a,%00011011
+  ldh [rBGP],a
+  ld a,LCDCF_ON|LCDCF_BG8000|LCDCF_BGON
+  ld [vblank_lcdc_value],a
+  ldh [rLCDC],a
+
+forever:
+  halt
+  jr forever
+
+section "main_gfx", ROM0
+Sukey_iu:  incbin "obj/gb/Sukey.iu"
