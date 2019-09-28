@@ -69,7 +69,7 @@ objlisto = $(foreach o,$(objlist),obj/gb/$(o).o)
 
 $(title).gb: $(objlisto)
 	rgblink -p 0xFF -m$(title).map -n$(title).sym -o$@ $^
-	rgbfix -p0 -v $@
+	rgbfix -p 0xFF -v $@
 
 $(title).gb.png: tools/pngify.py $(title).gb $(pngfile)
 	$(PY) $^ $@
