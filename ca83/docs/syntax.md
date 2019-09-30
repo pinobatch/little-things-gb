@@ -42,13 +42,15 @@ handler, and executes the next instruction.  This makes it useful
 for synchronizing to the start of horizontal blanking for VRAM
 transfer routines.
 
-But when the CPU executes `halt` while IME is off, the CPU skips
-incrementing PC after reading the following instruction byte,
-causing the byte to be executed twice.  The standard workaround
-is to fill this byte with a 1-byte instruction that takes 1 cycle
-and is idempotent (that is, it has the same effect if run twice).
-Many assemblers targeting SM83, such as RGBASM, insert `nop` after
-every `halt` by default.  Other choices follow:
+But when the CPU executes `halt` while IME is off and an interrupt
+is already pending (`(IE & IF) != 0`), the CPU skips incrementing PC
+after reading the following instruction byte, causing the byte to be
+executed twice.  In addition, if IME is off, the interrupts that
+ended the `halt` remain pending. The standard workaround fills this
+byte with a 1-byte instruction that takes 1 cycle and is idempotent
+(that is, it has the same effect if run twice).  Many assemblers
+targeting SM83, such as RGBASM, insert `nop` after every `halt`
+by default.  Other choices follow:
 
     scf
     ld reg8, reg8
@@ -75,6 +77,9 @@ different idempotent instruction in that slot.
 For this reason, ca83 provides both `halt` and `hlt`.  The shorter
 mnemonic emits a shorter encoding without the following `nop`
 and is safe if the next instruction is 1 byte and idempotent.
+However, some debugging emulators are not set up to recognize all
+such safe instructions; they will break on double execution of any
+instruction other than `nop`.
 
 The `stop` instruction is used to turn off most of the system and
 wait for a keypress while using very little power.  It was never
