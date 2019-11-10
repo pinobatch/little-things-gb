@@ -1,6 +1,7 @@
 *.gb
 *.gb.png
 *.map
+*.dbg
 *.sym
 *.sav
 *.o

@@ -31,7 +31,7 @@ endif
 
 .PHONY: run all dist zip clean
 
-run: $(title).gb
+run: $(title).gb $(title).dbg
 	wine "$(HOME)/.wine/drive_c/Program Files (x86)/bgb/bgb.exe" $<
 
 all: $(title).gb
@@ -61,12 +61,24 @@ $(objdir)/%-16.chr1: tools/pilbmp2nes.py $(imgdir)/%.png
 
 # assembly
 $(objdir)/%.o: $(srcdir)/%.z80 $(srcdir)/sm83isa.mac $(srcdir)/hardware.inc $(srcdir)/global.inc
-	ca65 -o $@ $<
+	ca65 -g -o $@ $<
 
 # linking
-$(title).gb: nombc.cfg $(foreach o,$(objlist),$(objdir)/$(o).o)
-	ld65 -o $@ -C $^
+
+# Use .INTERMEDIATE to create a serial bottleneck, working around
+# GNU Make's inconvenient handling of multiple outputs in parallel
+# Thanks to Ivan Zaentsev https://stackoverflow.com/a/47951465/2738262
+.INTERMEDIATE: rom_and_dbg
+rom_and_dbg: nombc.cfg $(foreach o,$(objlist),$(objdir)/$(o).o)
+	ld65 -o $@ --dbgfile $(title).dbg -C $^
 	$(PY) tools/gbheader.py -vj -k "mm" -l 0x33 -m 0 -n 0 -p 0xFF -t "CA83DEMO" -r 0 $@
+
+$(title).dbg $(title).gb: rom_and_dbg
+	touch $@
+
+# debug file generation
+%.sym: %.dbg
+	$(PY) tools/dbgtosym.py $< > $@
 
 # Packaging
 $(objdir)/index.txt: makefile
