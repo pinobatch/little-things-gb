@@ -24,6 +24,8 @@ anything to make struct fields convenient to access.
 
 Building the project in this early state currently requires the
 following installed: GNU Make, Python 3, Pillow, cc65, and GCC.
+(I could remove the dependency on GCC or on Python 3 and Pillow,
+but not both.)
 
 To use:
 

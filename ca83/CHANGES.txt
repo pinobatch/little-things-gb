@@ -1,8 +1,10 @@
+0.03
+* Add bgb debug information (requested by NovaSquirrel)
+
 0.02
 * Describe syntax choices
 * Add hlt and djnz macros
 * Rename to sm83isa.mac to allow use of .macpack
-* Allow macro pack
 * Add gbheader.py so that rgbfix need not be installed
 
 (no number) (2019-09-26)

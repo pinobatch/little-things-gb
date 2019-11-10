@@ -3,7 +3,7 @@
 # (insert zlib license here)
 
 title   := ca83
-version := 0.02
+version := 0.03
 objlist := \
   header main unpb8
 
