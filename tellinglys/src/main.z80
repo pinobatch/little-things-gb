@@ -358,10 +358,10 @@ pass_freeze:
   call memset
   ld hl,CHRRAM0
   ld de,pass_chr
-  ld b,66
+  ld b,$6B
   call pb16_unpack_block
-  ld bc,16*256+6
-  ld de,_SCRN0+32*6+2
+  ld bc,16*256+11
+  ld de,_SCRN0+32*3+2
   ld hl,pass_nam
   call load_pb16_nam
   ld a,%11100100

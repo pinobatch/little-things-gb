@@ -1,3 +1,8 @@
+Future
+* More informative success message (requested by Vinny and ISSOtm)
+* Clarify dialogue to rule out anything untoward between Johny and
+  papa (requested by DreamLandBuds, exelotl, and ISSOtm)
+
 0.02 (2018-12-29)
 * Less "cheeky", more informative failure message
 * Add SGB test result
