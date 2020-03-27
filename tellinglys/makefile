@@ -1,7 +1,7 @@
 #!/usr/bin/make -f
 #
 # Makefile for Telling LYs
-# Copyright 2014-2018 Damian Yerrick
+# Copyright 2014-2020 Damian Yerrick
 #
 # Copying and distribution of this file, with or without
 # modification, are permitted in any medium without royalty
@@ -11,7 +11,7 @@
 
 # Used in the title of the zipfile and .gb executable
 title:=tellinglys
-version:=0.02
+version:=0.03
 
 # Space-separated list of asm files without .z80 extension
 # (use a backslash to continue on the next line)
@@ -55,6 +55,11 @@ $(title)-$(version).zip: zip.in $(title).gb \
   README.md CHANGES.txt obj/gb/index.txt
 	$(PY) tools/zipup.py $< $(title)-$(version) -o $@
 	-advzip -z3 $@
+
+zip.in: makefile
+	echo $(title).gb > $@
+	echo $@ >> $@
+	git ls-files . >> $@
 
 # Build zip.in from the list of files in the Git tree
 #zip.in: makefile

@@ -59,7 +59,6 @@ $(title)-$(version).zip: zip.in $(title).gb \
 # Build zip.in from the list of files in the Git tree
 zip.in: makefile
 	git ls-files | grep -e "^[^.0]" > $@
-	echo 05-burndown/note_from_nocash.md >> $@
 	echo $(title).gb >> $@
 	echo zip.in >> $@
 
