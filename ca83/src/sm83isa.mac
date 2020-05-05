@@ -309,8 +309,13 @@
   .byte $0F
 .endmacro
 
-.macro stop
-  .byte $10, $00
+.macro stop stopsig
+  .byte $10
+  .if .blank ({stopsig})
+    .byte $00  ; signature byte defaults to $00
+  .else
+    .byte (stopsig)
+  .endif
 .endmacro
 
 .macro rla
@@ -339,8 +344,14 @@
   .byte $27
 .endmacro
 
-.macro cpl
-  .byte $2F
+.macro cpl aorblank
+  .if .blank ({aorblank})
+    .byte $2F
+  .elseif .xmatch ({aorblank}, a)
+    .byte $2F
+  .else
+    .error "cpl: unknown source"
+  .endif
 .endmacro
 
 .macro scf

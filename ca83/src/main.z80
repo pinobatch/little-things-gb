@@ -31,6 +31,8 @@ LF = $0A
 
   ld a, %00001100
   ldh [rBGP], a
+  ld a, IEF_VBLANK
+  ldh [rIE], a
   ld a, LCDCF_ON|LCDCF_WINOFF|LCDCF_BG8000|LCDCF_BG9800|LCDCF_OBJOFF|LCDCF_BGON
   ldh [vblank_lcdc_value], a
   ldh [rLCDC], a

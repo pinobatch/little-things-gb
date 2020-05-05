@@ -31,7 +31,7 @@ endif
 
 .PHONY: run all dist zip clean
 
-run: $(title).gb $(title).dbg
+run: $(title).gb $(title).sym
 	wine "$(HOME)/.wine/drive_c/Program Files (x86)/bgb/bgb.exe" $<
 
 all: $(title).gb
@@ -42,6 +42,7 @@ zip: $(title)-$(version).zip
 
 clean:
 	-rm tools/pb8$(DOTEXE) $(objdir)/*.o $(objdir)/*.chr* $(objdir)/*.pb8
+	-rm $(title).dbg $(title).sym
 
 # incbins and other dependencies
 $(objdir)/main.o: $(objdir)/gsmplay8x15-16.chr1.pb8
@@ -70,8 +71,8 @@ $(objdir)/%.o: $(srcdir)/%.z80 $(srcdir)/sm83isa.mac $(srcdir)/hardware.inc $(sr
 # Thanks to Ivan Zaentsev https://stackoverflow.com/a/47951465/2738262
 .INTERMEDIATE: rom_and_dbg
 rom_and_dbg: nombc.cfg $(foreach o,$(objlist),$(objdir)/$(o).o)
-	ld65 -o $@ --dbgfile $(title).dbg -C $^
-	$(PY) tools/gbheader.py -vj -k "mm" -l 0x33 -m 0 -n 0 -p 0xFF -t "CA83DEMO" -r 0 $@
+	ld65 -o $(title).gb --dbgfile $(title).dbg -C $^
+	$(PY) tools/gbheader.py -vj -k "mm" -l 0x33 -m 0 -n 0 -p 0xFF -t "CA83DEMO" -r 0 $(title).gb
 
 $(title).dbg $(title).gb: rom_and_dbg
 	touch $@

@@ -18,7 +18,7 @@ statically above `$FF00`.  Indexed HRAM accesses can be written as
 All ALU operations with A (`add`, `adc`, `sub`, `sbc`, `and`,
 `xor`, `or`, and `cp`) can be written in a 1- or 2-argument form:
 `add [hl]` and `add a, [hl]` mean the same, as do `xor $10` and
-`xor a, $10`.
+`xor a, $10`.  Likewise, `cpl` and `cpl a` both work.
 
 A `jr` 1 byte backward executes the `$FF` value as `rst $38` if
 taken.  Thus `rst $38` (and _only_ `rst $38`) can be written with
@@ -85,4 +85,5 @@ The `stop` instruction is used to turn off most of the system and
 wait for a keypress while using very little power.  It was never
 used because the mechanism was prone to butt dialing.  Instead,
 it was repurposed in the Game Boy Color to change its CPU speed.
-The CPU ignores the byte after `stop`, and ca83 emits `$00` there.
+The CPU ignores the byte after `stop`.  By default, ca83 emits `$00`
+there; override this by specifying an argument such as `stop $31`.
