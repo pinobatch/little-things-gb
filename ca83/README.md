@@ -11,7 +11,8 @@ assemblers I found had either little support for larger projects
 So as a proof of concept, I reimplemented [6502 as a macro pack] for
 the ca65 assembler in its `.setcpu "none"` mode.  Based on this work,
 I asked blargg, who was more familiar with SPC700 than I was, to
-implement [SPC700 as a macro pack].
+implement [SPC700 as a macro pack]. Likewise, ARM9 implemented
+[casfx], or Super FX GSU as a macro pack.
 
 This project demonstrates a macro pack implementing all opcodes of
 SM83, an 8-bit architecture created by Sharp and used by the CPU core
@@ -42,4 +43,5 @@ License: zlib
 [lorom-template]: https://github.com/pinobatch/lorom-template
 [6502 as a macro pack]: https://forums.nesdev.com/viewtopic.php?f=2&t=10701
 [SPC700 as a macro pack]: https://forums.nesdev.com/viewtopic.php?f=12&t=10730
+[casfx]: https://github.com/ARM9/casfx
 [struct]: https://gbdev.gg8.se/wiki/articles/Struct
