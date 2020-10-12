@@ -6,8 +6,8 @@ use in the Game Boy compact video game system.  The syntax used by
 the majority of assemblers targeting SM83 resembles Zilog's syntax
 more than Intel's.
 
-For consistency, ca83 recognizes `[hl]`, not `(hl)`.
-Brackets (`[]`) always denote memory access, and parentheses `()`
+For consistency, ca83 recognizes `[hl]`, not `(hl)`.  Square
+brackets `[]` always denote memory access, and parentheses `()`
 always denote grouping of arithmetic expressions.
 
 All `ld` instructions can be written as `mov`.  The `ld` instruction
@@ -22,7 +22,8 @@ All ALU operations with A (`add`, `adc`, `sub`, `sbc`, `and`,
 
 A `jr` 1 byte backward executes the `$FF` value as `rst $38` if
 taken.  Thus `rst $38` (and _only_ `rst $38`) can be written with
-condition codes, such as `rst nz, $38`.
+condition codes, such as `rst nz, $38`.  This can prove convenient
+for assertions if you have a crash handler at `$0038`.
 
 The argument to `rst` need not be a literal constant.  It can be any
 symbol, such as a label, so long as the linker places the symbol
@@ -75,15 +76,15 @@ very tight VRAM transfer may fit better into hblank by putting a
 different idempotent instruction in that slot.
 
 For this reason, ca83 provides both `halt` and `hlt`.  The shorter
-mnemonic emits a shorter encoding without the following `nop`
-and is safe if the next instruction is 1 byte and idempotent.
-However, some debugging emulators are not set up to recognize all
-such safe instructions; they will break on double execution of any
-instruction other than `nop`.
+mnemonic emits a shorter encoding without the following `nop` and
+is safe if the next instruction is 1 byte and idempotent or if IME
+is guaranteed to be on.  However, some debugging emulators are not
+set up to recognize all such safe instructions; they will break
+on double execution of any instruction other than `nop`.
 
 The `stop` instruction is used to turn off most of the system and
-wait for a keypress while using very little power.  It was never
-used because the mechanism was prone to butt dialing.  Instead,
+wait for a keypress while using very little power.  Games never
+used it because the mechanism was prone to butt dialing.  Instead,
 it was repurposed in the Game Boy Color to change its CPU speed.
 The CPU ignores the byte after `stop`.  By default, ca83 emits `$00`
 there; override this by specifying an argument such as `stop $31`.
