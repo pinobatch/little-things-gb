@@ -36,6 +36,9 @@ To use:
 3. Link with a linker script suitable for your ROM size
 4. Inject a header with `tools/gbheader.py`
 
+(Later I discovered that blargg had already made the same thing as
+[ca65-gb-z80].)
+
 
 Copyright 2019 Damian Yerrick  
 License: zlib
@@ -45,3 +48,4 @@ License: zlib
 [SPC700 as a macro pack]: https://forums.nesdev.com/viewtopic.php?f=12&t=10730
 [casfx]: https://github.com/ARM9/casfx
 [struct]: https://gbdev.gg8.se/wiki/articles/Struct
+[ca65-gb-z80]: http://blargg.8bitalley.com/gameboy/ca65-gb-z80-0.1.0.zip

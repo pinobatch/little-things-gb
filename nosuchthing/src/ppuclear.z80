@@ -1,0 +1,72 @@
+;
+; Basic LCD routines for Game Boy
+;
+; Copyright 2018 Damian Yerrick
+; 
+; This software is provided 'as-is', without any express or implied
+; warranty.  In no event will the authors be held liable for any damages
+; arising from the use of this software.
+; 
+; Permission is granted to anyone to use this software for any purpose,
+; including commercial applications, and to alter it and redistribute it
+; freely, subject to the following restrictions:
+; 
+; 1. The origin of this software must not be misrepresented; you must not
+;    claim that you wrote the original software. If you use this software
+;    in a product, an acknowledgment in the product documentation would be
+;    appreciated but is not required.
+; 2. Altered source versions must be plainly marked as such, and must not be
+;    misrepresented as being the original software.
+; 3. This notice may not be removed or altered from any source distribution.
+;
+include "src/hardware.inc"
+include "src/global.inc"
+
+SECTION "rom_ppuclear", ROM0
+
+;;
+; Waits for forced blank (rLCDC bit 7 clear) or vertical blank
+; (rLY >= 144).  Use before VRAM upload or before clearing rLCDC bit 7.
+busy_wait_vblank::
+  ; If rLCDC bit 7 already clear, we're already in forced blanking
+  ldh a,[rLCDC]
+  rlca
+  ret nc
+
+  ; Otherwise, wait for rLCDC to become 144 (not 145) because rLY=0
+  ; represents both the prerender line and the first visible line.
+  ; This differs from Super NES, where the first visible line is 1,
+  ; and NES, which has a post-render line numbered 240 between
+  ; picture and vblank.
+.wait:
+  ldh a, [rLY]
+  cp 144
+  jr c, .wait
+  ret
+
+;;
+; Copies a B column by C row tilemap from HL to screen at DE.
+load_nam::
+  push bc
+  push de
+  .byteloop:
+    ld a,[hl+]
+    ld [de],a
+    inc de
+    dec b
+    jr nz,.byteloop
+
+  ; Move to next screen row
+  pop de
+  ld a,32
+  add e
+  ld e,a
+  jr nc,.no_inc_d
+    inc d
+  .no_inc_d:
+
+  ; Restore width; do more rows remain?
+  pop bc
+  dec c
+  jr nz,load_nam
+  ret

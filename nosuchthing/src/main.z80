@@ -1,0 +1,56 @@
+include "src/hardware.inc"
+include "src/global.inc"
+
+; For the purpose of hLocals, see a fairly long rant in global.inc
+section "hram_locals", HRAM[hLocals]
+  ds locals_size
+
+STACK_SIZE EQU 64
+section "stack", WRAM0[$D000-STACK_SIZE]
+stack_top: ds STACK_SIZE
+
+section "main", ROM0
+reset_handler::
+  di  ; Disable interrupts
+  ld sp, stack_top + STACK_SIZE  ; Set up stack pointer (full descending)
+
+  ; Release the key matrix right now
+  ld a,P1F_NONE
+  ldh [rP1],a
+
+  ; TODO: Set up MBC because the rest of this tech demo is in
+  ; another castle 
+
+  ; Rendering can be turned off only during blanking.
+  call busy_wait_vblank
+  xor a
+  ldh [rLCDC], a  ; turn off rendering
+  ldh [rNR52], a  ; disable (and reset) audio
+
+  ld a,IEF_VBLANK
+  ldh [rIE],a  ; enable IRQs
+  xor a
+  ldh [rIF],a  ; acknowledge IRQs
+  ei
+  ldh [rSCX],a
+  ldh [rSCY],a
+  
+  ld de,NoSuchThingAsNintendo_iu
+  ld hl,CHRRAM0
+  call unpack_iu_file
+  ld hl,SCRN_TMP
+  ld de,_SCRN0 + 32
+  ld bc, $130E
+  call load_nam
+
+  ld a,%00011011
+  ldh [rBGP],a
+  ld a,LCDCF_ON|LCDCF_BG8000|LCDCF_BGON
+  ldh [rLCDC],a
+
+forever:
+  halt
+  jr forever
+
+section "main_gfx", ROM0
+NoSuchThingAsNintendo_iu:  incbin "obj/gb/NoSuchThingAsNintendo.iu"

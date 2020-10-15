@@ -1,8 +1,9 @@
 No Such Thing
 =============
 
-**This folder is not yet functional.**
-Further development is pending expansion of ca83.
+**This folder is not fully functional.**
+Development of the Game Gear side of the ROM is pending expansion
+of ca83.
 
 In 1990, Nintendo placed print ads clarifying how to refer to
 its products by their trademarks.  For example, it's not accurate
