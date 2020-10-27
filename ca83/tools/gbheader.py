@@ -59,8 +59,38 @@ def parse_byte_value(tnum):
         raise ValueError("byte value not 0-255: %s" % tnum)
     return num
 
+# First for ROM[0x0149] == 0, then ROM[0x0149] != 0
+mapper_names = {
+    "ROM": (0x00, 0x09),
+    "MBC1": (0x01, 0x03),
+    "MBC2": (0x06, None),
+    "MMM01": (0x0B, 0x0D),
+    "MBC3": (0x0F, 0x10),
+    "MBC5": (0x19, 0x1B),
+    "MBC5+RUMBLE": (0x1C, 0x1E),
+    "MBC6": (0x20, 0x20),
+    "MBC7": (None, 0x22),
+    "CAMERA": (None, 0xFC),
+    "TAMA5": (0xFD, 0xFD),
+    "HUC3": (0xFE, 0xFE),
+    "HUC1": (0xFF, 0xFF),
+}
+
+def parse_mapper(name):
+    try:
+        mapids = mapper_names[name.upper()]
+    except KeyError:
+        pass
+    else:
+        return name, mapids
+    mapid = parse_byte_value(name)
+    return name, (mapid, mapid)
+
 def parse_argv(argv):
-    p = argparse.ArgumentParser()
+    tmappernames = ", ".join(mapper_names)
+    help_prolog = "Builds or fixes a Game Boy ROM's internal header."
+    help_epilog = "Mapper names for --mbc: " + tmappernames
+    p = argparse.ArgumentParser(description=help_prolog, epilog=help_epilog)
     p.add_argument("-C", "--gbc-only",
                    dest="gbcmode", action='store_const', const=0xC0,
                    help="mark as Game Boy Color exclusive (0x143=0xC0)")
@@ -82,8 +112,8 @@ def parse_argv(argv):
     p.add_argument("-l", "--old-publisher", type=parse_byte_value,
                    help="set old publisher at 0x14B (ignored with -k or -s)")
     p.add_argument("-m", "--mapper", "--mbc", metavar="mbc_type",
-                   type=parse_byte_value,
-                   help="set mapper type at 0x147")
+                   type=parse_mapper,
+                   help="set mapper type at 0x147 (name or number)")
     p.add_argument("-n", "--rom-version", metavar="rom_version",
                    type=parse_byte_value,
                    help="set ROM version at 0x14C")
@@ -93,7 +123,7 @@ def parse_argv(argv):
                    "ROM size at 0x148")
     p.add_argument("-r", "--ram-size", metavar="ram_size",
                    type=parse_byte_value,
-                   help="set RAM size at 0x148")
+                   help="set RAM size at 0x149")
     p.add_argument("-s", "--sgb",
                    dest="sgbmode", action='store_const', const=0x03,
                    help="set SGB mode (0x146=0x03) "
@@ -111,7 +141,9 @@ def parse_argv(argv):
     return p.parse_args(argv[1:])
 
 def main(argv=None):
-    args = parse_argv(argv or sys.argv)
+    argv = argv or sys.argv
+    progname = os.path.basename(argv[0])
+    args = parse_argv(argv)
     with open(args.file, "rb") as infp:
         rom = bytearray(infp.read())
 
@@ -137,10 +169,20 @@ def main(argv=None):
     if args.sgbmode:
         rom[0x146] = 0x03
         rom[0x14B] = 0x33
-    if args.mapper is not None:
-        rom[0x147] = args.mapper
     if args.ram_size is not None:
-        rom[0x148] = args.ram_size
+        rom[0x149] = args.ram_size
+    if args.mapper is not None:
+        mapname, mapper = args.mapper
+        mapper = mapper[1 if rom[0x149] else 0]
+        if mapper is None:
+            withramtxt = ("cartridge with RAM"
+                          if rom[0x149]
+                          else "cartridge without RAM")
+            print("%s: %s: mapper %s not defined for %s"
+                  % (progname, args.file, mapname, withramtxt),
+                  file=sys.stderr)
+            exit(1)
+        rom[0x147] = mapper
     if args.region is not None:
         rom[0x14A] = args.region
     if args.pad_with is not None:
