@@ -1,0 +1,928 @@
+; Assembler for Zilog Z80 ISA written in ca65's macro language
+; so you can assemble the Game Boy and Game Gear ports of a game
+; with the same software
+;
+; Copyright 2019, 2020 Damian Yerrick
+; insert zlib license here
+
+; To use CA80, place z80isa.mac in the include path and add
+; one of these to your source code:
+;
+; .macpack z80isa
+; .include "z80isa.mac"
+
+.setcpu "none"
+
+.ifndef _z80_INCLUDED
+.define _z80_INCLUDED 1
+
+; Core of LD with register or immediate source, ALU, and CB prefix
+; instructions that don't use IX/IY
+.macro _i8080_regsrc op, immop, src
+  .if .xmatch ({src}, b)
+    .byte (op)^$00
+  .elseif .xmatch ({src}, c)
+    .byte (op)^$01
+  .elseif .xmatch ({src}, d)
+    .byte (op)^$02
+  .elseif .xmatch ({src}, e)
+    .byte (op)^$03
+  .elseif .xmatch ({src}, h)
+    .byte (op)^$04
+  .elseif .xmatch ({src}, l)
+    .byte (op)^$05
+  .elseif .xmatch ({src}, [hl])
+    .byte (op)^$06
+  .elseif .xmatch ({src}, a)
+    .byte (op)^$07
+  .elseif .not .blank({immop})
+    .byte (immop)
+    .byte (src)
+  .else
+    .byte "unknown source register"
+  .endif
+.endmacro
+
+; Core of LD IXL, and LD IXH,
+.macro _ixiy_regsrc op, immop, src, hname, lname
+  .if .xmatch ({src}, b)
+    .byte (op)^$00
+  .elseif .xmatch ({src}, c)
+    .byte (op)^$01
+  .elseif .xmatch ({src}, d)
+    .byte (op)^$02
+  .elseif .xmatch ({src}, e)
+    .byte (op)^$03
+  .elseif .xmatch ({src}, {hname})
+    .byte (op)^$04
+  .elseif .xmatch ({src}, {lname})
+    .byte (op)^$05
+  .elseif .xmatch ({src}, a)
+    .byte (op)^$07
+  .elseif .not .blank({immop})
+    .byte (immop)
+    .byte (src)
+  .else
+    .byte "unknown source register"
+  .endif
+.endmacro
+
+.macro _z80_regsrc op, immop, src, preop, noixhsrc
+  .if .xmatch ({src}, b)
+    .ifnblank preop
+      .byte preop
+    .endif
+    .byte (op)^$00
+  .elseif .xmatch ({src}, c)
+    .ifnblank preop
+      .byte preop
+    .endif
+    .byte (op)^$01
+  .elseif .xmatch ({src}, d)
+    .ifnblank preop
+      .byte preop
+    .endif
+    .byte (op)^$02
+  .elseif .xmatch ({src}, e)
+    .ifnblank preop
+      .byte preop
+    .endif
+    .byte (op)^$03
+  .elseif .xmatch ({src}, h)
+    .ifnblank preop
+      .byte preop
+    .endif
+    .byte (op)^$04
+  .elseif .xmatch ({src}, l)
+    .ifnblank preop
+      .byte preop
+    .endif
+    .byte (op)^$05
+  .elseif .xmatch ({src}, ixh)
+    .ifnblank noixhsrc
+      .error "cannot use ixh as source"
+    .endif
+    .byte $DD
+    .ifnblank preop
+      .byte preop
+    .endif
+    .byte (op)^$04
+  .elseif .xmatch ({src}, ixl)
+    .ifnblank noixhsrc
+      .error "cannot use ixl as source"
+    .endif
+    .byte $DD
+    .ifnblank preop
+      .byte preop
+    .endif
+    .byte (op)^$05
+  .elseif .xmatch ({src}, iyh)
+    .ifnblank noixhsrc
+      .error "cannot use iyh as source"
+    .endif
+    .byte $FD
+    .ifnblank preop
+      .byte preop
+    .endif
+    .byte (op)^$04
+  .elseif .xmatch ({src}, iyl)
+    .ifnblank noixhsrc
+      .error "cannot use iyl as source"
+    .endif
+    .byte $FD
+    .ifnblank preop
+      .byte preop
+    .endif
+    .byte (op)^$05
+  .elseif .xmatch ({src}, [hl])
+    .ifnblank preop
+      .byte preop
+    .endif
+    .byte (op)^$06
+  .elseif .xmatch (.left(3, {src}), [ix+) && .xmatch (.right (1, {src}), ])
+    .byte $DD
+    .ifnblank preop
+      .byte preop
+      _z80_sbyte (.mid (3, .tcount ({src})-4, {src}))
+      .byte (op)^$06
+    .else
+      .byte (op)^$06
+      _z80_sbyte (.mid (3, .tcount ({src})-4, {src}))
+    .endif
+  .elseif .xmatch (.left(3, {src}), [ix-) && .xmatch (.right (1, {src}), ])
+    .byte $DD
+    .ifnblank preop
+      .byte preop
+      _z80_sbyte -(.mid (3, .tcount ({src})-4, {src}))
+      .byte (op)^$06
+    .else
+      .byte (op)^$06
+      _z80_sbyte -(.mid (3, .tcount ({src})-4, {src}))
+    .endif
+  .elseif .xmatch (.left(3, {src}), [iy+) && .xmatch (.right (1, {src}), ])
+    .byte $FD
+    .ifnblank preop
+      .byte preop
+      _z80_sbyte (.mid (3, .tcount ({src})-4, {src}))
+      .byte (op)^$06
+    .else
+      .byte (op)^$06
+      _z80_sbyte (.mid (3, .tcount ({src})-4, {src}))
+    .endif
+  .elseif .xmatch (.left(3, {src}), [iy-) && .xmatch (.right (1, {src}), ])
+    .byte $FD
+    .ifnblank preop
+      .byte preop
+      _z80_sbyte -(.mid (3, .tcount ({src})-4, {src}))
+      .byte (op)^$06
+    .else
+      .byte (op)^$06
+      _z80_sbyte -(.mid (3, .tcount ({src})-4, {src}))
+    .endif
+  .elseif .xmatch ({src}, a)
+    .ifnblank preop
+      .byte preop
+    .endif
+    .byte (op)^$07
+  .elseif .not .blank({immop})
+    .ifnblank preop
+      .byte preop
+    .endif
+    .byte (immop)
+    .byte (src)
+  .else
+    .byte "unknown source register"
+  .endif
+.endmacro
+
+; used for jr
+.macro _sm83_conditional op, flag
+  .if .xmatch ({flag}, nz)
+    .byte op
+  .elseif .xmatch ({flag}, z)
+    .byte (op)^$08
+  .elseif .xmatch ({flag}, nc)
+    .byte (op)^$10
+  .elseif .xmatch ({flag}, c)
+    .byte (op)^$18
+  .else
+    .error "unknown branch condition"
+  .endif
+.endmacro
+
+; used for jp, call, ret
+.macro _z80_conditional op, flag
+  .if .xmatch ({flag}, po)
+    .byte (op)^$20
+  .elseif .xmatch ({flag}, pe)
+    .byte (op)^$28
+  .elseif .xmatch ({flag}, p)
+    .byte (op)^$30
+  .elseif .xmatch ({flag}, m)
+    .byte (op)^$38
+  .else
+    _sm83_conditional op, flag
+  .endif
+.endmacro
+
+.macro _z80_sbyte in_value
+  .local @value
+  @value = in_value
+  .assert @value >= -128 && @value <= 127, error, "signed byte out of range"
+  .byte <@value
+.endmacro
+
+.macro _z80_push_pop op, pair
+  .if .xmatch ({pair}, bc)
+    .byte (op)+$00
+  .elseif .xmatch ({pair}, de)
+    .byte (op)+$10
+  .elseif .xmatch ({pair}, hl)
+    .byte (op)+$20
+  .elseif .xmatch ({pair}, af)
+    .byte (op)+$30
+  .elseif .xmatch ({pair}, ix)
+    .byte $DD, (op)+$20
+  .elseif .xmatch ({pair}, iy)
+    .byte $FD, (op)+$20
+  .else
+    .error "unknown register pair"
+  .endif
+.endmacro
+
+.macro _z80_in_out op, reg
+  .byte $ED
+  .if .xmatch ({pair}, b)
+    .byte (op)+$00
+  .elseif .xmatch ({pair}, c)
+    .byte (op)+$08
+  .elseif .xmatch ({pair}, d)
+    .byte (op)+$10
+  .elseif .xmatch ({pair}, e)
+    .byte (op)+$18
+  .elseif .xmatch ({pair}, h)
+    .byte (op)+$20
+  .elseif .xmatch ({pair}, l)
+    .byte (op)+$28
+  .elseif .xmatch ({pair}, a)
+    .byte (op)+$38
+  .else
+    .error "unknown register"
+  .endif
+.endmacro
+
+.macro _z80_alu op, dst, src
+  .if .blank({dst})
+    .error "ALU: no arguments"
+  .elseif .blank({src})
+    _z80_alu (op), a, {dst}
+  .elseif .xmatch ({dst}, a)
+    _z80_regsrc op, (op + $46), src
+  .else
+    .error "ALU: unknown destination"
+  .endif
+.endmacro
+
+.macro _z80_bit op, in_place, src
+  .local @place
+  @place = in_place
+  .assert 0 <= @place && @place <= 7, error, "place value must be 0-7"
+  _z80_regsrc op | (@place << 3), immop, src, $CB, no
+.endmacro
+
+; Instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+.macro nop
+  .byte $00
+.endmacro
+
+.macro ld dst, src
+
+  ; Destination 8-bit registers other than A
+  .if .xmatch ({dst}, b)
+    _z80_regsrc $40, $06, {src}
+  .elseif .xmatch ({dst}, c)
+    _z80_regsrc $48, $0E, {src}
+  .elseif .xmatch ({dst}, d)
+    _z80_regsrc $50, $16, {src}
+  .elseif .xmatch ({dst}, e)
+    _z80_regsrc $58, $1E, {src}
+  .elseif .xmatch ({dst}, h)
+    _z80_regsrc $60, $26, {src}, , no
+  .elseif .xmatch ({dst}, l)
+    _z80_regsrc $68, $2E, {src}, , no
+  .elseif .xmatch ({dst}, ixh)
+    .byte $DD
+    _ixiy_regsrc $60, $26, {src}, ixh, ixl
+  .elseif .xmatch ({dst}, ixl)
+    .byte $DD
+    _ixiy_regsrc $68, $2E, {src}, ixh, ixl
+  .elseif .xmatch ({dst}, iyh)
+    .byte $FD
+    _ixiy_regsrc $60, $26, {src}, iyh, iyl
+  .elseif .xmatch ({dst}, iyl)
+    .byte $FD
+    _ixiy_regsrc $68, $2E, {src}, iyh, iyl
+  .elseif .xmatch ({dst}, [hl])
+    .if .xmatch ({src}, [hl])
+      .error "ld is a halt"
+    .endif
+    _i8080_regsrc $70, $36, {src}
+  .elseif .xmatch (.left(3, {dst}), [ix+) && .xmatch (.right (1, {dst}), ])
+    .if .xmatch ({src}, [hl])
+      .error "ld is a halt"
+    .endif
+    .byte $DD
+    _i8080_regsrc $70, $36, {src}
+    _z80_sbyte (.mid (3, .tcount ({dst})-4, {dst}))
+  .elseif .xmatch (.left(3, {dst}), [ix-) && .xmatch (.right (1, {dst}), ])
+    .if .xmatch ({src}, [hl])
+      .error "ld is a halt"
+    .endif
+    .byte $DD
+    _i8080_regsrc $70, $36, {src}
+    _z80_sbyte -(.mid (3, .tcount ({dst})-4, {dst}))
+  .elseif .xmatch (.left(3, {dst}), [iy+) && .xmatch (.right (1, {dst}), ])
+    .if .xmatch ({src}, [hl])
+      .error "ld is a halt"
+    .endif
+    .byte $FD
+    _i8080_regsrc $70, $36, {src}
+    _z80_sbyte (.mid (3, .tcount ({dst})-4, {dst}))
+  .elseif .xmatch (.left(3, {dst}), [iy-) && .xmatch (.right (1, {dst}), ])
+    .if .xmatch ({src}, [hl])
+      .error "ld is a halt"
+    .endif
+    .byte $FD
+    _i8080_regsrc $70, $36, {src}
+    _z80_sbyte -(.mid (3, .tcount ({dst})-4, {dst}))
+
+  ; Destination A
+  .elseif .xmatch ({dst}, a)
+    .if .xmatch ({src}, b)
+      .byte $78
+    .elseif .xmatch ({src}, c)
+      .byte $79
+    .elseif .xmatch ({src}, d)
+      .byte $7A
+    .elseif .xmatch ({src}, e)
+      .byte $7B
+    .elseif .xmatch ({src}, h)
+      .byte $7C
+    .elseif .xmatch ({src}, l)
+      .byte $7D
+    .elseif .xmatch ({src}, [hl])
+      .byte $7E
+    .elseif .xmatch ({src}, a)
+      .byte $7F
+    .elseif .xmatch ({src}, [bc])
+      .byte $0A
+    .elseif .xmatch ({src}, [de])
+      .byte $1A
+    .elseif .xmatch ({src}, i)
+      .byte $ED,$57  ; some interrupt-related function?
+    .elseif .xmatch ({src}, r)
+      .byte $ED,$5F  ; some refresh-related function?
+    .elseif .xmatch ({src}, ixh)
+      .byte $DD,$7C
+    .elseif .xmatch ({src}, ixl)
+      .byte $DD,$7D
+    .elseif .xmatch ({src}, iyh)
+      .byte $FD,$7C
+    .elseif .xmatch ({src}, iyl)
+      .byte $FD,$7D
+    .elseif .xmatch (.left(3, {src}), [ix+) && .xmatch (.right (1, {src}), ])
+      .byte $DD,$7E
+      _z80_sbyte (.mid (3, .tcount ({src})-4, {src}))
+    .elseif .xmatch (.left(3, {src}), [ix-) && .xmatch (.right (1, {src}), ])
+      .byte $DD,$7E
+      _z80_sbyte -(.mid (3, .tcount ({src})-4, {src}))
+    .elseif .xmatch (.left(3, {src}), [iy+) && .xmatch (.right (1, {src}), ])
+      .byte $FD,$7E
+      _z80_sbyte (.mid (3, .tcount ({src})-4, {src}))
+    .elseif .xmatch (.left(3, {src}), [iy-) && .xmatch (.right (1, {src}), ])
+      .byte $FD,$7E
+      _z80_sbyte -(.mid (3, .tcount ({src})-4, {src}))
+    .elseif .xmatch (.left (1, {src}), [) && .xmatch (.right (1, {src}), ])
+      .byte $3A
+      .word .mid (1, .tcount ({src})-2, {src})
+    .else
+      .byte $3E
+      .byte src
+    .endif
+
+  ; Destination 16-bit registers
+  .elseif .xmatch ({dst}, bc)
+    .if .xmatch (.left (1, {src}), [) && .xmatch (.right (1, {src}), ])
+      .byte $ED,$4B
+      .word .mid (1, .tcount ({src})-2, {src})
+    .else
+      .byte $01
+      .word src
+    .endif
+  .elseif .xmatch ({dst}, de)
+    .if .xmatch (.left (1, {src}), [) && .xmatch (.right (1, {src}), ])
+      .byte $ED,$5B
+      .word .mid (1, .tcount ({src})-2, {src})
+    .else
+      .byte $11
+      .word src
+    .endif
+  .elseif .xmatch ({dst}, hl)
+    .if .xmatch (.left (1, {src}), [) && .xmatch (.right (1, {src}), ])
+      .byte $2A
+      .word .mid (1, .tcount ({src})-2, {src})
+    .else
+      .byte $21
+      .word src
+    .endif
+  .elseif .xmatch ({dst}, ix)
+    .byte $DD
+    .if .xmatch (.left (1, {src}), [) && .xmatch (.right (1, {src}), ])
+      .byte $2A
+      .word .mid (1, .tcount ({src})-2, {src})
+    .else
+      .byte $21
+      .word src
+    .endif
+  .elseif .xmatch ({dst}, iy)
+    .byte $FD
+    .if .xmatch (.left (1, {src}), [) && .xmatch (.right (1, {src}), ])
+      .byte $2A
+      .word .mid (1, .tcount ({src})-2, {src})
+    .else
+      .byte $21
+      .word src
+    .endif
+  .elseif .xmatch ({dst}, sp)
+    .if .xmatch (.left (1, {src}), [) && .xmatch (.right (1, {src}), ])
+      .byte $ED,$7B
+      .word .mid (1, .tcount ({src})-2, {src})
+    .elseif .xmatch ({src}, ix)
+      .byte $DD,$F9
+    .elseif .xmatch ({src}, iy)
+      .byte $FD,$F9
+    .elseif .xmatch ({src}, hl)
+      .byte $F9
+    .else
+      .byte $31
+      .word src
+    .endif
+
+  ; Source A, destination memory
+  .elseif .xmatch ({src}, a)
+    .if .xmatch ({dst}, [bc])
+      .byte $02
+    .elseif .xmatch ({dst}, [de])
+      .byte $12
+    .elseif .xmatch (.left (1, {dst}), [) && .xmatch (.right (1, {dst}), ])
+      .byte $32
+      .word .mid (1, .tcount ({dst})-2, {dst})
+    .else
+      .error "ld: unknown store from A"
+    .endif
+
+  ; Source register pair, destination absolute memory
+  .elseif .xmatch (.left (1, {dst}), [) && .xmatch (.right (1, {dst}), ])
+    .if .xmatch ({src}, hl)
+      .byte $22
+      .word .mid (1, .tcount ({dst})-2, {dst})
+    .elseif .xmatch ({src}, bc)
+      .byte $ED,$43
+      .word .mid (1, .tcount ({dst})-2, {dst})
+    .elseif .xmatch ({src}, de)
+      .byte $ED,$53
+      .word .mid (1, .tcount ({dst})-2, {dst})
+    .elseif .xmatch ({src}, sp)
+      .byte $ED,$73
+      .word .mid (1, .tcount ({dst})-2, {dst})
+    .elseif .xmatch ({src}, ix)
+      .byte $DD,$22
+      .word .mid (1, .tcount ({dst})-2, {dst})
+    .elseif .xmatch ({src}, iy)
+      .byte $FD,$22
+      .word .mid (1, .tcount ({dst})-2, {dst})
+    .else
+      .error "absolute store: unknown source"
+    .endif
+
+  .else
+    .error "ld: unknown destination"
+  .endif
+.endmacro
+
+.macro inc src
+  .if .xmatch ({src}, b)
+    .byte $04
+  .elseif .xmatch ({src}, c)
+    .byte $0C
+  .elseif .xmatch ({src}, d)
+    .byte $14
+  .elseif .xmatch ({src}, e)
+    .byte $1C
+  .elseif .xmatch ({src}, h)
+    .byte $24
+  .elseif .xmatch ({src}, l)
+    .byte $2C
+  .elseif .xmatch ({src}, [hl])
+    .byte $34
+  .elseif .xmatch ({src}, a)
+    .byte $3C
+  .elseif .xmatch ({src}, ixh)
+    .byte $DD,$24
+  .elseif .xmatch ({src}, ixl)
+    .byte $DD,$2C
+  .elseif .xmatch ({src}, iyh)
+    .byte $FD,$24
+  .elseif .xmatch ({src}, iyl)
+    .byte $FD,$2C
+  .elseif .xmatch ({src}, bc)
+    .byte $03
+  .elseif .xmatch ({src}, de)
+    .byte $13
+  .elseif .xmatch ({src}, hl)
+    .byte $23
+  .elseif .xmatch ({src}, sp)
+    .byte $33
+  .elseif .xmatch ({src}, ix)
+    .byte $DD,$23
+  .elseif .xmatch ({src}, iy)
+    .byte $FD,$23
+  .elseif .xmatch (.left(3, {src}), [ix+) && .xmatch (.right (1, {src}), ])
+    .byte $DD,$34
+    _z80_sbyte (.mid (3, .tcount ({src})-4, {src}))
+  .elseif .xmatch (.left(3, {src}), [ix-) && .xmatch (.right (1, {src}), ])
+    .byte $DD,$34
+    _z80_sbyte -(.mid (3, .tcount ({src})-4, {src}))
+  .elseif .xmatch (.left(3, {src}), [iy+) && .xmatch (.right (1, {src}), ])
+    .byte $FD,$34
+    _z80_sbyte (.mid (3, .tcount ({src})-4, {src}))
+  .elseif .xmatch (.left(3, {src}), [iy-) && .xmatch (.right (1, {src}), ])
+    .byte $FD,$34
+    _z80_sbyte -(.mid (3, .tcount ({src})-4, {src}))
+  .else
+    .error "inc: unknown source"
+  .endif
+.endmacro
+
+.macro dec src
+  .if .xmatch ({src}, b)
+    .byte $05
+  .elseif .xmatch ({src}, c)
+    .byte $0D
+  .elseif .xmatch ({src}, d)
+    .byte $15
+  .elseif .xmatch ({src}, e)
+    .byte $1D
+  .elseif .xmatch ({src}, h)
+    .byte $25
+  .elseif .xmatch ({src}, l)
+    .byte $2D
+  .elseif .xmatch ({src}, [hl])
+    .byte $35
+  .elseif .xmatch ({src}, a)
+    .byte $3D
+  .elseif .xmatch ({src}, ixh)
+    .byte $DD,$25
+  .elseif .xmatch ({src}, ixl)
+    .byte $DD,$2D
+  .elseif .xmatch ({src}, iyh)
+    .byte $FD,$25
+  .elseif .xmatch ({src}, iyl)
+    .byte $FD,$2D
+  .elseif .xmatch ({src}, bc)
+    .byte $0B
+  .elseif .xmatch ({src}, de)
+    .byte $1B
+  .elseif .xmatch ({src}, hl)
+    .byte $2B
+  .elseif .xmatch ({src}, sp)
+    .byte $3B
+  .elseif .xmatch ({src}, ix)
+    .byte $DD,$2B
+  .elseif .xmatch ({src}, iy)
+    .byte $FD,$2B
+  .elseif .xmatch (.left(3, {src}), [ix+) && .xmatch (.right (1, {src}), ])
+    .byte $DD,$35
+    _z80_sbyte (.mid (3, .tcount ({src})-4, {src}))
+  .elseif .xmatch (.left(3, {src}), [ix-) && .xmatch (.right (1, {src}), ])
+    .byte $DD,$35
+    _z80_sbyte -(.mid (3, .tcount ({src})-4, {src}))
+  .elseif .xmatch (.left(3, {src}), [iy+) && .xmatch (.right (1, {src}), ])
+    .byte $FD,$35
+    _z80_sbyte (.mid (3, .tcount ({src})-4, {src}))
+  .elseif .xmatch (.left(3, {src}), [iy-) && .xmatch (.right (1, {src}), ])
+    .byte $FD,$35
+    _z80_sbyte -(.mid (3, .tcount ({src})-4, {src}))
+  .else
+    .error "inc: unknown source"
+  .endif
+.endmacro
+
+.macro halt
+  .byte $76
+.endmacro
+
+.macro rlca
+  .byte $07
+.endmacro
+
+; Because the prime in af' introduces a character constant,
+; ca80 recognizes `ex af` instead of `ex af, af'`.
+.macro ex first, second
+  .if .xmatch(first, af) && .blank(second)
+    .byte $08
+  .elseif .xmatch(first, [sp])
+    .if .xmatch(second, hl)
+      .byte $E3
+    .elseif .xmatch(second, ix)
+      .byte $DD,$E3
+    .elseif .xmatch(second, iy)
+      .byte $FD,$E3
+    .else
+      .error "ex [sp]: unknown pair to exchange"
+    .endif
+  .elseif .xmatch(first, de) && .xmatch(second, hl)
+    .byte $EB
+  .else
+    .error "ex: unknown pair"
+  .endif
+.endmacro
+
+.macro add dst, src
+  .if .xmatch ({dst}, hl)
+    .if .xmatch ({src}, bc)
+      .byte $09
+    .elseif .xmatch ({src}, de)
+      .byte $19
+    .elseif .xmatch ({src}, hl)
+      .byte $29
+    .elseif .xmatch ({src}, sp)
+      .byte $39
+    .else
+      .error "add hl: unknown source"
+    .endif
+  .elseif .xmatch ({dst}, ix)
+    .if .xmatch ({src}, bc)
+      .byte $DD,$09
+    .elseif .xmatch ({src}, de)
+      .byte $DD,$19
+    .elseif .xmatch ({src}, ix)
+      .byte $DD,$29
+    .elseif .xmatch ({src}, sp)
+      .byte $DD,$39
+    .else
+      .error "add ix: unknown source"
+    .endif
+  .elseif .xmatch ({dst}, iy)
+    .if .xmatch ({src}, bc)
+      .byte $FD,$09
+    .elseif .xmatch ({src}, de)
+      .byte $FD,$19
+    .elseif .xmatch ({src}, iy)
+      .byte $FD,$29
+    .elseif .xmatch ({src}, sp)
+      .byte $FD,$39
+    .else
+      .error "add iy: unknown source"
+    .endif
+  .else
+    _z80_alu $80, dst, src
+  .endif
+.endmacro
+
+.macro djnz dst
+  .local @dst
+  @dst = dst
+  .byte $10
+  _z80_sbyte (@dst)-*-1
+.endmacro
+
+.macro jr flag, dst
+  .if .blank ({dst})
+    .local @dst
+    @dst = flag
+    .byte $18
+    _z80_sbyte (@dst)-*-1
+  .else
+    .local @dst
+    @dst = dst
+    _sm83_conditional $20, flag
+    _z80_sbyte (@dst)-*-1
+  .endif
+.endmacro
+
+.macro rrca
+  .byte $0F
+.endmacro
+
+.macro rla
+  .byte $17
+.endmacro
+
+.macro rra
+  .byte $1F
+.endmacro
+
+.macro daa
+  .byte $27
+.endmacro
+
+.macro cpl aorblank
+  .if .blank ({aorblank})
+    .byte $2F
+  .elseif .xmatch ({aorblank}, a)
+    .byte $2F
+  .else
+    .error "cpl: unknown source"
+  .endif
+.endmacro
+
+.macro scf
+  .byte $37
+.endmacro
+
+.macro ccf
+  .byte $3F
+.endmacro
+
+.macro adc dst, src
+  _z80_alu $88, dst, src
+.endmacro
+
+.macro sub dst, src
+  _z80_alu $90, dst, src
+.endmacro
+
+.macro sbc dst, src
+  _z80_alu $98, dst, src
+.endmacro
+
+.macro and dst, src
+  _z80_alu $A0, dst, src
+.endmacro
+
+.macro xor dst, src
+  _z80_alu $A8, dst, src
+.endmacro
+
+.macro or dst, src
+  _z80_alu $B0, dst, src
+.endmacro
+
+.macro cp dst, src
+  _z80_alu $B8, dst, src
+.endmacro
+
+.macro jp flag, dst
+  .if .xmatch ({flag}, hl)
+    .if .blank ({dst})
+      .byte $E9
+    .else
+      .error "jp hl is not conditional"
+    .endif
+  .elseif .xmatch ({flag}, ix)
+    .if .blank ({dst})
+      .byte $DD,$E9
+    .else
+      .error "jp ix is not conditional"
+    .endif
+  .elseif .xmatch ({flag}, iy)
+    .if .blank ({dst})
+      .byte $FD,$E9
+    .else
+      .error "jp iy is not conditional"
+    .endif
+  .elseif .blank ({dst})
+    .byte $C3
+    .word flag
+  .else
+    _z80_conditional $C2, flag
+    .word dst
+  .endif
+.endmacro
+
+.macro call flag, dst
+  .if .blank ({dst})
+    .byte $CD
+    .word flag
+  .else
+    _z80_conditional $C4, flag
+    .word dst
+  .endif
+.endmacro
+
+.macro rst in_dst, in_dst2
+  .local @dst
+  .if .blank({in_dst2})
+    @dst = in_dst
+    .assert @dst = @dst & $38, error, "rst: target out of range"
+    .byte @dst | $C7
+  .else
+    ; rst nc, $38 becomes jr nc, -1
+    @dst = in_dst2
+    .assert @dst = $38, error, "rst: only rst $38 is conditional"
+    _sm83_conditional $20, in_dst
+    .byte $FF
+  .endif
+.endmacro
+
+.macro ret flag
+  .if .blank ({flag})
+    .byte $C9
+  .else
+    _z80_conditional $C0, flag
+  .endif
+.endmacro
+
+.macro pop pair
+  _z80_push_pop $C1, pair
+.endmacro
+
+.macro push pair
+  _z80_push_pop $C5, pair
+.endmacro
+
+.macro in reg, port
+  .if .xmatch ({port}, [c])
+    _z80_in_out $40, reg
+  .elseif .xmatch ({reg}, a) && .xmatch (.left (1, {port}), [) && .xmatch (.right (1, {port}), ])
+    .byte $DB
+    .byte .mid (1, .tcount ({port})-2, {port})
+  .else
+    .error "in: invalid register/port"
+  .endif
+.endmacro
+
+.macro out port, reg
+  .if .xmatch ({port}, [c])
+    _z80_in_out $41, reg
+  .elseif .xmatch ({reg}, a) && .xmatch (.left (1, {port}), [) && .xmatch (.right (1, {port}), ])
+    .byte $D3
+    .byte .mid (1, .tcount ({port})-2, {port})
+  .else
+    .error "out: invalid register/port"
+  .endif
+.endmacro
+
+.macro di
+  .byte $F3
+.endmacro
+
+.macro ei
+  .byte $FB
+.endmacro
+
+.macro rlc src
+  _z80_regsrc $00, , src, $CB, no
+.endmacro
+
+.macro rrc src
+  _z80_regsrc $08, , src, $CB, no
+.endmacro
+
+.macro rl src
+  _z80_regsrc $10, , src, $CB, no
+.endmacro
+
+.macro rr src
+  _z80_regsrc $18, , src, $CB, no
+.endmacro
+
+.macro sla src
+  _z80_regsrc $20, , src, $CB, no
+.endmacro
+
+.macro sra src
+  _z80_regsrc $28, , src, $CB, no
+.endmacro
+
+.macro sll src
+  _z80_regsrc $30, , src, $CB, no
+.endmacro
+
+.macro srl src
+  _z80_regsrc $38, , src, $CB, no
+.endmacro
+
+.macro bit place, src
+  _z80_bit $40, place, src
+.endmacro
+
+.macro res place, src
+  _z80_bit $80, place, src
+.endmacro
+
+.macro set place, src
+  _z80_bit $C0, place, src
+.endmacro
+
+.macro mov dst, src
+  ld dst, src
+.endmacro
+
+.macro exx
+  .byte $D9
+.endmacro
+
+.endif  ; _z80_INCLUDED
