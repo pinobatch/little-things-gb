@@ -232,39 +232,45 @@
   .byte <@value
 .endmacro
 
-.macro _z80_push_pop op, pair
+.macro _i8080_regpair op, pair, hlname, afsp
   .if .xmatch ({pair}, bc)
     .byte (op)+$00
   .elseif .xmatch ({pair}, de)
     .byte (op)+$10
-  .elseif .xmatch ({pair}, hl)
+  .elseif .xmatch ({pair}, {hlname})
     .byte (op)+$20
-  .elseif .xmatch ({pair}, af)
+  .elseif .xmatch ({pair}, {afsp})
     .byte (op)+$30
-  .elseif .xmatch ({pair}, ix)
-    .byte $DD, (op)+$20
-  .elseif .xmatch ({pair}, iy)
-    .byte $FD, (op)+$20
   .else
     .error "unknown register pair"
   .endif
 .endmacro
 
+.macro _z80_regpair op, pair
+  .if .xmatch ({pair}, ix)
+    .byte $DD, (op)+$20
+  .elseif .xmatch ({pair}, iy)
+    .byte $FD, (op)+$20
+  .else
+    _i8080_regpair op, {pair}, hl, af
+  .endif
+.endmacro
+
 .macro _z80_in_out op, reg
   .byte $ED
-  .if .xmatch ({pair}, b)
+  .if .xmatch ({reg}, b)
     .byte (op)+$00
-  .elseif .xmatch ({pair}, c)
+  .elseif .xmatch ({reg}, c)
     .byte (op)+$08
-  .elseif .xmatch ({pair}, d)
+  .elseif .xmatch ({reg}, d)
     .byte (op)+$10
-  .elseif .xmatch ({pair}, e)
+  .elseif .xmatch ({reg}, e)
     .byte (op)+$18
-  .elseif .xmatch ({pair}, h)
+  .elseif .xmatch ({reg}, h)
     .byte (op)+$20
-  .elseif .xmatch ({pair}, l)
+  .elseif .xmatch ({reg}, l)
     .byte (op)+$28
-  .elseif .xmatch ({pair}, a)
+  .elseif .xmatch ({reg}, a)
     .byte (op)+$38
   .else
     .error "unknown register"
@@ -475,6 +481,10 @@
       .byte $02
     .elseif .xmatch ({dst}, [de])
       .byte $12
+    .elseif .xmatch ({dst}, i)
+      .byte $ED,$47
+    .elseif .xmatch ({dst}, r)
+      .byte $ED,$4F
     .elseif .xmatch (.left (1, {dst}), [) && .xmatch (.right (1, {dst}), ])
       .byte $32
       .word .mid (1, .tcount ({dst})-2, {dst})
@@ -651,41 +661,13 @@
 
 .macro add dst, src
   .if .xmatch ({dst}, hl)
-    .if .xmatch ({src}, bc)
-      .byte $09
-    .elseif .xmatch ({src}, de)
-      .byte $19
-    .elseif .xmatch ({src}, hl)
-      .byte $29
-    .elseif .xmatch ({src}, sp)
-      .byte $39
-    .else
-      .error "add hl: unknown source"
-    .endif
+    _i8080_regpair $09, {src}, {dst}, sp
   .elseif .xmatch ({dst}, ix)
-    .if .xmatch ({src}, bc)
-      .byte $DD,$09
-    .elseif .xmatch ({src}, de)
-      .byte $DD,$19
-    .elseif .xmatch ({src}, ix)
-      .byte $DD,$29
-    .elseif .xmatch ({src}, sp)
-      .byte $DD,$39
-    .else
-      .error "add ix: unknown source"
-    .endif
+    .byte $DD
+    _i8080_regpair $09, {src}, {dst}, sp
   .elseif .xmatch ({dst}, iy)
-    .if .xmatch ({src}, bc)
-      .byte $FD,$09
-    .elseif .xmatch ({src}, de)
-      .byte $FD,$19
-    .elseif .xmatch ({src}, iy)
-      .byte $FD,$29
-    .elseif .xmatch ({src}, sp)
-      .byte $FD,$39
-    .else
-      .error "add iy: unknown source"
-    .endif
+    .byte $FD
+    _i8080_regpair $09, {src}, {dst}, sp
   .else
     _z80_alu $80, dst, src
   .endif
@@ -747,7 +729,12 @@
 .endmacro
 
 .macro adc dst, src
-  _z80_alu $88, dst, src
+  .if .xmatch({dst}, hl)
+    .byte $ED
+    _i8080_regpair $4A, src, hl, sp
+  .else
+    _z80_alu $88, dst, src
+  .endif
 .endmacro
 
 .macro sub dst, src
@@ -755,7 +742,12 @@
 .endmacro
 
 .macro sbc dst, src
-  _z80_alu $98, dst, src
+  .if .xmatch({dst}, hl)
+    .byte $ED
+    _i8080_regpair $42, src, hl, sp
+  .else
+    _z80_alu $98, dst, src
+  .endif
 .endmacro
 
 .macro and dst, src
@@ -836,11 +828,11 @@
 .endmacro
 
 .macro pop pair
-  _z80_push_pop $C1, pair
+  _z80_regpair $C1, pair
 .endmacro
 
 .macro push pair
-  _z80_push_pop $C5, pair
+  _z80_regpair $C5, pair
 .endmacro
 
 .macro in reg, port
@@ -924,5 +916,103 @@
 .macro exx
   .byte $D9
 .endmacro
+
+.macro neg
+  .byte $ED, $44
+.endmacro
+
+.macro retn
+  .byte $ED, $45
+.endmacro
+
+.macro im mode
+  .if mode = 0
+    .byte $ED, $46
+  .elseif mode = 1
+    .byte $ED, $56
+  .elseif mode = 2
+    .byte $ED, $5E
+  .else
+    .error "im: unknowm mode"
+  .endif
+.endmacro
+
+.macro reti
+  .byte $ED, $4D
+.endmacro
+
+.macro rrd
+  .byte $ED, $67
+.endmacro
+
+.macro rld
+  .byte $ED, $6F
+.endmacro
+
+.macro ldi
+  .byte $ED, $A0
+.endmacro
+
+.macro cpi
+  .byte $ED, $A1
+.endmacro
+
+.macro ini
+  .byte $ED, $A2
+.endmacro
+
+.macro outi
+  .byte $ED, $A3
+.endmacro
+
+.macro ldd
+  .byte $ED, $A8
+.endmacro
+
+.macro cpd
+  .byte $ED, $A9
+.endmacro
+
+.macro ind
+  .byte $ED, $AA
+.endmacro
+
+.macro outd
+  .byte $ED, $AB
+.endmacro
+
+.macro ldir
+  .byte $ED, $B0
+.endmacro
+
+.macro cpir
+  .byte $ED, $B1
+.endmacro
+
+.macro inir
+  .byte $ED, $B2
+.endmacro
+
+.macro otir
+  .byte $ED, $B3
+.endmacro
+
+.macro lddr
+  .byte $ED, $B8
+.endmacro
+
+.macro cpdr
+  .byte $ED, $B9
+.endmacro
+
+.macro indr
+  .byte $ED, $BA
+.endmacro
+
+.macro otdr
+  .byte $ED, $BB
+.endmacro
+
+
 
 .endif  ; _z80_INCLUDED

@@ -1,5 +1,5 @@
-; to test:
-; ca65 -l z80test-out.txt -o /dev/null z80test.z80 && less z80test-out.txt
+; Test every nonredundant instruction in the Z80
+; ca65 -l lst.txt -o /dev/null all_z80_insts.z80 && less lst.txt
 
 .include "z80isa.mac"
 
@@ -588,17 +588,28 @@ prevlabel:
 
 ; PREFIX DD ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+  ; $DD00-$DD1F
+  add ix, bc
+  add ix, de
+
+  ; $DD20-DD3F
+  ld ix,$DD12
+  ld [$DD22], ix
   inc ix
   inc ixh
   dec ixh
   ld ixh, $62
+  add ix, ix
+  ld ix, [$DDA2]
   dec ix
   inc ixl
   dec ixl
   ld ixl, $E2
 
-  inc [ix+5]
-  dec [ix+5]
+  inc [ix+$43]
+  dec [ix+$53]
+  ld [ix+$63], $DD
+  add ix, sp
 
   ld b, ixh
   ld b, ixl
@@ -656,17 +667,46 @@ prevlabel:
   ld a, [ix+$11]
   ld a, [ix-$23]
 
-  add ix, bc
-  add ix, de
-  add ix, ix
-  add ix, sp
   add a, ixh
   add a, ixl
   add a, [ix+$11]
   add a, [ix-$7A]
+  adc a, ixh
+  adc a, ixl
+  adc a, [ix+$11]
+  adc a, [ix-$72]
 
+  sub a, ixh
+  sub a, ixl
+  sub a, [ix+$11]
+  sub a, [ix-$6A]
+  sbc a, ixh
+  sbc a, ixl
+  sbc a, [ix+$11]
+  sbc a, [ix-$62]
+
+  and a, ixh
+  and a, ixl
+  and a, [ix+$11]
+  and a, [ix-$5A]
+  xor a, ixh
+  xor a, ixl
+  xor a, [ix+$11]
+  xor a, [ix-$52]
+
+  or a, ixh
+  or a, ixl
+  or a, [ix+$11]
+  or a, [ix-$4A]
+  cp a, ixh
+  cp a, ixl
+  cp a, [ix+$11]
+  cp a, [ix-$42]
+
+  pop ix
   ex [sp],ix
-
+  push ix
+  jp ix
   ld sp, ix
 
   rlc [ix+$60]
@@ -704,44 +744,116 @@ prevlabel:
 
 ; PREFIX ED ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+  ;$ED40
+  in b, [c]
+  out [c], b
+  sbc hl, bc
+  ld [$DE34], bc
+  neg
+  retn
+  im 0
+  ld i, a
+  in c, [c]
+  out [c], c
+  adc hl, bc
   ld bc, [$DEB4]
+  reti
+  ld r, a
+
+  ;$ED50
+  in d, [c]
+  out [c], d
+  sbc hl, de
+  ld [$DE35], de
+  im 1
   ld a, i
+  in e, [c]
+  out [c], e
+  adc hl, de
   ld de, [$DEB5]
+  im 2
   ld a, r
+
+  ; $ED60
+  in h, [c]
+  out [c], h
+  sbc hl, hl
+  rrd
+  in l, [c]
+  out [c], l
+  adc hl, hl
+  rld
+  
+  ; $ED70
+  sbc hl, sp
+  ld [$DE37], sp
+  in a, [c]
+  out [c], a
+  adc hl, sp
   ld sp, [$DEB7]
-  ld sp, hl
+
+  ; $EDA0
+  ldi
+  cpi
+  ini
+  outi
+  ldd
+  cpd
+  ind
+  outd
+
+  ; $EDB0
+  ldir
+  cpir
+  inir
+  otir
+  lddr
+  cpdr
+  indr
+  otdr
 
 ; PREFIX FD ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+  ; $DD00-$DD1F
+  add iy, bc
+  add iy, de
+
+  ; $DD20-DD3F
+  ld iy,$DD12
+  ld [$DD22], iy
   inc iy
   inc iyh
   dec iyh
   ld iyh, $62
+  add iy, iy
+  ld iy, [$DDA2]
   dec iy
   inc iyl
   dec iyl
   ld iyl, $E2
 
-  inc [iy+5]
-  dec [iy+5]
+  inc [iy+$43]
+  dec [iy+$53]
+  ld [iy+$63], $DD
+  add iy, sp
 
   ld b, iyh
   ld b, iyl
   ld b, [iy+$64]
-  ld b, [iy-$03]
+  ld b, [iy-$23]
   ld c, iyh
   ld c, iyl
   ld c, [iy+$11]
-  ld c, [iy-$03]
+  ld c, [iy-$23]
 
   ld d, iyh
   ld d, iyl
   ld d, [iy+$65]
-  ld d, [iy-$03]
+  ld d, [iy-$23]
   ld e, iyh
   ld e, iyl
   ld e, [iy+$11]
-  ld e, [iy-$03]
+  ld e, [iy-$23]
 
   ld iyh, b
   ld iyh, c
@@ -750,9 +862,8 @@ prevlabel:
   ld iyh, iyh
   ld iyh, iyl
   ld h, [iy+$66]
-  ld h, [iy-$21]
+  ld h, [iy-$13]
   ld iyh, a
-
   ld iyl, b
   ld iyl, c
   ld iyl, d
@@ -760,39 +871,68 @@ prevlabel:
   ld iyl, iyh
   ld iyl, iyl
   ld l, [iy+$11]
-  ld l, [iy-$21]
+  ld l, [iy-$1A]
   ld iyl, a
 
   ld [iy+$07], b
-  ld [iy-$03], b
+  ld [iy-$23], b
   ld [iy+$17], c
-  ld [iy-$03], c
+  ld [iy-$23], c
   ld [iy+$27], d
-  ld [iy-$03], d
+  ld [iy-$23], d
   ld [iy+$37], e
-  ld [iy-$03], e
+  ld [iy-$23], e
   ld [iy+$47], h
-  ld [iy-$03], h
+  ld [iy-$23], h
   ld [iy+$57], l
-  ld [iy-$03], l
+  ld [iy-$23], l
   ld [iy+$77], a
-  ld [iy-$03], a
+  ld [iy-$23], a
   ld a, iyh
   ld a, iyl
   ld a, [iy+$11]
-  ld a, [iy-$03]
+  ld a, [iy-$23]
 
-  add iy, bc
-  add iy, de
-  add iy, iy
-  add iy, sp
   add a, iyh
   add a, iyl
   add a, [iy+$11]
   add a, [iy-$7A]
+  adc a, iyh
+  adc a, iyl
+  adc a, [iy+$11]
+  adc a, [iy-$72]
 
+  sub a, iyh
+  sub a, iyl
+  sub a, [iy+$11]
+  sub a, [iy-$6A]
+  sbc a, iyh
+  sbc a, iyl
+  sbc a, [iy+$11]
+  sbc a, [iy-$62]
+
+  and a, iyh
+  and a, iyl
+  and a, [iy+$11]
+  and a, [iy-$5A]
+  xor a, iyh
+  xor a, iyl
+  xor a, [iy+$11]
+  xor a, [iy-$52]
+
+  or a, iyh
+  or a, iyl
+  or a, [iy+$11]
+  or a, [iy-$4A]
+  cp a, iyh
+  cp a, iyl
+  cp a, [iy+$11]
+  cp a, [iy-$42]
+
+  pop iy
   ex [sp],iy
-
+  push iy
+  jp iy
   ld sp, iy
 
   rlc [iy+$60]
