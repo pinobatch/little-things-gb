@@ -22,7 +22,7 @@
 include "src/hardware.inc"
 include "src/global.inc"
 
-SECTION "rom_ppuclear", ROM0
+SECTION "busy_wait_vblank", ROM0
 
 ;;
 ; Waits for forced blank (rLCDC bit 7 clear) or vertical blank
@@ -43,6 +43,8 @@ busy_wait_vblank::
   cp 144
   jr c, .wait
   ret
+
+SECTION "load_nam", ROM0
 
 ;;
 ; Copies a B column by C row tilemap from HL to screen at DE.

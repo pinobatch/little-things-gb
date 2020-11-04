@@ -61,9 +61,11 @@ unpack_iu_file::
 
   ld h, d
   ld l, e
+  ; fall through
 
 iur_unpack_2hl_bytes::
   ld a, [hl+]  ; Fetch tilemap size
+  ; fall through
 
 ;;
 ; Unpack 2*A bytes of IUR map data from HL to SCRN_TMP

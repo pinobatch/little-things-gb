@@ -11,7 +11,7 @@
 
 # Used in the title of the zipfile and .gb executable
 title:=nosuchthing
-version:=wip
+version:=0.01
 
 # Space-separated list of asm files without .z80 extension
 # (use a backslash to continue on the next line)
@@ -54,8 +54,8 @@ $(title)-$(version).zip: zip.in $(title).gb \
 
 # Build zip.in from the list of files in the Git tree
 zip.in: makefile
-	git ls-files | grep -e "^[^.]" > $@
-	echo $(title).gb.png >> $@
+	git ls-files | grep -e "^[^.]" | grep -ve "^src/gg" | grep -ve "^README.md" > $@
+	echo $(title).gb >> $@
 	echo zip.in >> $@
 
 obj/gb/index.txt: makefile
@@ -96,3 +96,4 @@ obj/gb/%.iu: obj/gb/%.chrgb
 
 %.pb16: tools/pb16.py %
 	$(PY) $^ $@
+	

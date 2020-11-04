@@ -14,15 +14,16 @@ Fast-forward to the late 2010s, when the Internet meme community
 rediscovered this ad and made parodies titled "There's no such
 thing as Nintendo."  These were meant to jokingly imply that
 Nintendo and its products never existed in the first place, and
-anyone who believes otherwise must be a victim of delusion.
+anyone who believes otherwise must be a victim of mass delusion.
 
-This short tech demo displays "There's no such thing as Nintendo"
-with Mario drawn as a black shadow.  It's intended for inclusion in
-a ROM for Sega Master System or Game Gear as a humorous error message
-that the game is running on the wrong emulator or flash cart.
+This 1K tech demo for Game Boy displays "There's no such thing as
+Nintendo" with Mario drawn as a shadow.  It's meant for inclusion
+in a ROM for Sega Master System or Game Gear as a humorous error
+message that the game is running on the wrong emulator or flash cart.
 Alternatively, should Nintendo's legal department start to attack
 fan-made content even more intensely than it did in the 2010s,
-the demo can represent _damnatio memoriae_ toward the alleged bully.
+the demo can represent a farewell to the homebrew scene with
+a hint of _damnatio memoriae_ toward the alleged bully.
 
 Checksum
 --------
@@ -39,7 +40,9 @@ warn for a wrong checksum, making the ROM as a whole look suspicious.
   stored in big endian at $014E.  Licensed games include the entire
   ROM in the checksum.
 
-References:
-
 * ["ROM Header" on SMS Power!](https://www.smspower.org/Development/ROMHeader)
 * ["The Cartridge header" in Pan Docs](https://gbdev.io/pandocs/#the-cartridge-header)
+
+Copyright 2020 Damian Yerrick  
+Distributed under the zlib License
+
