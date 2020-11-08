@@ -1,0 +1,561 @@
+; SM83 (Sharp microprocessor in Game Boy) assembler
+; written in ca65's macro language
+; so you can assemble the SNES and GB sides of a project
+; with the same software
+;
+; Copyright 2019 Damian Yerrick
+; insert zlib license here
+
+; To use CA83, place sm83isa.mac in the include path and add
+; one of these to your source code:
+;
+; .macpack sm83isa
+; .include "sm83isa.mac"
+
+;
+; TODO:
+; 1. File "Choose scanline for VRAM viewer" feature request in mGBA
+
+.setcpu "none"
+
+.ifndef _sm83_INCLUDED
+.define _sm83_INCLUDED 1
+
+; Core of LD with register or immediate source,
+; ALU, and CB prefix instructions
+.macro _sm83_regsrc op, immop, src
+  .if .xmatch ({src}, b)
+    .byte (op)^$00
+  .elseif .xmatch ({src}, c)
+    .byte (op)^$01
+  .elseif .xmatch ({src}, d)
+    .byte (op)^$02
+  .elseif .xmatch ({src}, e)
+    .byte (op)^$03
+  .elseif .xmatch ({src}, h)
+    .byte (op)^$04
+  .elseif .xmatch ({src}, l)
+    .byte (op)^$05
+  .elseif .xmatch ({src}, [hl])
+    .byte (op)^$06
+  .elseif .xmatch ({src}, a)
+    .byte (op)^$07
+  .elseif .not .blank({immop})
+    .byte (immop)
+    .byte (src)
+  .else
+    .byte "unknown source register"
+  .endif
+.endmacro
+
+.macro _sm83_conditional op, flag
+  .if .xmatch ({flag}, nz)
+    .byte op
+  .elseif .xmatch ({flag}, z)
+    .byte (op)^$08
+  .elseif .xmatch ({flag}, nc)
+    .byte (op)^$10
+  .elseif .xmatch ({flag}, c)
+    .byte (op)^$18
+  .else
+    .error "unknown branch condition"
+  .endif
+.endmacro
+
+.macro _sm83_sbyte in_value
+  .local @value
+  @value = in_value
+  .assert @value >= -128 && @value <= 127, error, "signed byte out of range"
+  .byte <@value
+.endmacro
+
+.macro _sm83_push_pop op, pair
+  .if .xmatch ({pair}, bc)
+    .byte (op)+$00
+  .elseif .xmatch ({pair}, de)
+    .byte (op)+$10
+  .elseif .xmatch ({pair}, hl)
+    .byte (op)+$20
+  .elseif .xmatch ({pair}, af)
+    .byte (op)+$30
+  .else
+    .error "unknown register pair"
+  .endif
+.endmacro
+
+.macro _sm83_alu op, dst, src
+  .if .blank({dst})
+    .error "ALU: no arguments"
+  .elseif .blank({src})
+    _sm83_alu (op), a, {dst}
+  .elseif .xmatch ({dst}, a)
+    _sm83_regsrc op, (op + $46), src
+  .else
+    .error "ALU: unknown destination"
+  .endif
+.endmacro
+
+.macro _sm83_bit op, in_place, src
+  .local @place
+  @place = in_place
+  .assert 0 <= @place && @place <= 7, error, "place value must be 0-7"
+  .byte $CB
+  _sm83_regsrc op | (@place << 3), immop, src
+.endmacro
+
+; Instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+.macro nop
+  .byte $00
+.endmacro
+
+.macro ld dst, src
+  ; Destination 8-bit regs other than A
+  .if .xmatch ({dst}, b)
+    _sm83_regsrc $40, $06, {src}
+  .elseif .xmatch ({dst}, c)
+    _sm83_regsrc $48, $0E, {src}
+  .elseif .xmatch ({dst}, d)
+    _sm83_regsrc $50, $16, {src}
+  .elseif .xmatch ({dst}, e)
+    _sm83_regsrc $58, $1E, {src}
+  .elseif .xmatch ({dst}, h)
+    _sm83_regsrc $60, $26, {src}
+  .elseif .xmatch ({dst}, l)
+    _sm83_regsrc $68, $2E, {src}
+  .elseif .xmatch ({dst}, [hl])
+    .if .xmatch ({src}, [hl])
+      .error "ld is a halt"
+    .else
+      _sm83_regsrc $70, $36, {src}
+    .endif
+
+  ; Destination A
+  .elseif .xmatch ({dst}, a)
+    .if .xmatch ({src}, b)
+      .byte $78
+    .elseif .xmatch ({src}, c)
+      .byte $79
+    .elseif .xmatch ({src}, d)
+      .byte $7A
+    .elseif .xmatch ({src}, e)
+      .byte $7B
+    .elseif .xmatch ({src}, h)
+      .byte $7C
+    .elseif .xmatch ({src}, l)
+      .byte $7D
+    .elseif .xmatch ({src}, [hl])
+      .byte $7E
+    .elseif .xmatch ({src}, a)
+      .byte $7F
+    .elseif .xmatch ({src}, [$ff00+c])
+      .byte $F2
+    .elseif .xmatch ({src}, [bc])
+      .byte $0A
+    .elseif .xmatch ({src}, [de])
+      .byte $1A
+    .elseif .xmatch ({src}, [hl+]) || .xmatch ({src}, [hli])
+      .byte $2A
+    .elseif .xmatch ({src}, [hl-]) || .xmatch ({src}, [hld])
+      .byte $3A
+    .elseif .xmatch (.left (1, {src}), [) && .xmatch (.right (1, {src}), ])
+      .byte $FA
+      .word .mid (1, .tcount ({src})-2, {src})
+    .else
+      .byte $3E
+      .byte src
+    .endif
+
+  ; Destination 16-bit regs
+  .elseif .xmatch ({dst}, bc)
+    .byte $01
+    .word src
+  .elseif .xmatch ({dst}, de)
+    .byte $11
+    .word src
+  .elseif .xmatch ({dst}, hl)
+    .if .xmatch (.left(2, {src}), sp+)
+      .byte $F8
+      _sm83_sbyte (.mid (2, .tcount ({src})-2, {src}))
+    .elseif .xmatch (.left(2, {src}), sp-)
+      .byte $F8
+      _sm83_sbyte -(.mid (2, .tcount ({src})-2, {src}))
+    .else
+      .byte $21
+      .word src
+    .endif
+  .elseif .xmatch ({dst}, sp)
+    .if .xmatch ({src}, hl)
+      .byte $F9
+    .else
+      .byte $31
+      .word src
+    .endif
+
+  ; Source A, destination memory
+  .elseif .xmatch ({src}, a)
+    .if .xmatch ({dst}, [$ff00+c])
+      .byte $E2
+    .elseif .xmatch ({dst}, [bc])
+      .byte $02
+    .elseif .xmatch ({dst}, [de])
+      .byte $12
+    .elseif .xmatch ({dst}, [hl+]) || .xmatch ({dst}, [hli])
+      .byte $22
+    .elseif .xmatch ({dst}, [hl-]) || .xmatch ({dst}, [hld])
+      .byte $32
+    .elseif .xmatch (.left (1, {dst}), [) && .xmatch (.right (1, {dst}), ])
+      .byte $EA
+      .word .mid (1, .tcount ({dst})-2, {dst})
+    .else
+      .error "ld: unknown store from A"
+    .endif
+
+  ; Source: SP, destination memory
+  .elseif .xmatch (.left (1, {dst}), [) && .xmatch (.right (1, {dst}), ]) && .xmatch({src}, sp)
+    .byte $08
+    .word .mid (1, .tcount ({dst})-2, {dst})
+  .else
+    .error "ld: unknown destination"
+  .endif
+.endmacro
+
+.macro inc src
+  .if .xmatch ({src}, b)
+    .byte $04
+  .elseif .xmatch ({src}, c)
+    .byte $0C
+  .elseif .xmatch ({src}, d)
+    .byte $14
+  .elseif .xmatch ({src}, e)
+    .byte $1C
+  .elseif .xmatch ({src}, h)
+    .byte $24
+  .elseif .xmatch ({src}, l)
+    .byte $2C
+  .elseif .xmatch ({src}, [hl])
+    .byte $34
+  .elseif .xmatch ({src}, a)
+    .byte $3C
+  .elseif .xmatch ({src}, bc)
+    .byte $03
+  .elseif .xmatch ({src}, de)
+    .byte $13
+  .elseif .xmatch ({src}, hl)
+    .byte $23
+  .elseif .xmatch ({src}, sp)
+    .byte $33
+  .else
+    .error "inc: unknown source"
+  .endif
+.endmacro
+
+.macro dec src
+  .if .xmatch ({src}, b)
+    .byte $05
+  .elseif .xmatch ({src}, c)
+    .byte $0D
+  .elseif .xmatch ({src}, d)
+    .byte $15
+  .elseif .xmatch ({src}, e)
+    .byte $1D
+  .elseif .xmatch ({src}, h)
+    .byte $25
+  .elseif .xmatch ({src}, l)
+    .byte $2D
+  .elseif .xmatch ({src}, [hl])
+    .byte $35
+  .elseif .xmatch ({src}, a)
+    .byte $3D
+  .elseif .xmatch ({src}, bc)
+    .byte $0B
+  .elseif .xmatch ({src}, de)
+    .byte $1B
+  .elseif .xmatch ({src}, hl)
+    .byte $2B
+  .elseif .xmatch ({src}, sp)
+    .byte $3B
+  .else
+    .error "inc: unknown source"
+  .endif
+.endmacro
+
+.macro rlca
+  .byte $07
+.endmacro
+
+.macro add dst, src
+  .if .xmatch ({dst}, hl)
+    .if .xmatch ({src}, bc)
+      .byte $09
+    .elseif .xmatch ({src}, de)
+      .byte $19
+    .elseif .xmatch ({src}, hl)
+      .byte $29
+    .elseif .xmatch ({src}, sp)
+      .byte $39
+    .else
+      .error "add hl: unknown source"
+    .endif
+  .elseif .xmatch ({dst}, sp)
+    .byte $E8
+    _sm83_sbyte src
+  .else
+    _sm83_alu $80, dst, src
+  .endif
+.endmacro
+
+.macro rrca
+  .byte $0F
+.endmacro
+
+.macro stop stopsig
+  .byte $10
+  .if .blank ({stopsig})
+    .byte $00  ; signature byte defaults to $00
+  .else
+    .byte (stopsig)
+  .endif
+.endmacro
+
+.macro rla
+  .byte $17
+.endmacro
+
+.macro jr flag, dst
+  .if .blank ({dst})
+    .local @dst
+    @dst = flag
+    .byte $18
+    _sm83_sbyte (@dst)-*-1
+  .else
+    .local @dst
+    @dst = dst
+    _sm83_conditional $20, flag
+    _sm83_sbyte (@dst)-*-1
+  .endif
+.endmacro
+
+.macro rra
+  .byte $1F
+.endmacro
+
+.macro daa
+  .byte $27
+.endmacro
+
+.macro cpl aorblank
+  .if .blank ({aorblank})
+    .byte $2F
+  .elseif .xmatch ({aorblank}, a)
+    .byte $2F
+  .else
+    .error "cpl: unknown source"
+  .endif
+.endmacro
+
+.macro scf
+  .byte $37
+.endmacro
+
+.macro ccf
+  .byte $3F
+.endmacro
+
+.macro hlt
+  .byte $76
+.endmacro
+
+.macro halt
+  .byte $76, $00
+.endmacro
+
+.macro adc dst, src
+  _sm83_alu $88, dst, src
+.endmacro
+
+.macro sub dst, src
+  _sm83_alu $90, dst, src
+.endmacro
+
+.macro sbc dst, src
+  _sm83_alu $98, dst, src
+.endmacro
+
+.macro and dst, src
+  _sm83_alu $A0, dst, src
+.endmacro
+
+.macro xor dst, src
+  _sm83_alu $A8, dst, src
+.endmacro
+
+.macro or dst, src
+  _sm83_alu $B0, dst, src
+.endmacro
+
+.macro cp dst, src
+  _sm83_alu $B8, dst, src
+.endmacro
+
+.macro ret flag
+  .if .blank ({flag})
+    .byte $C9
+  .else
+    _sm83_conditional $C0, flag
+  .endif
+.endmacro
+
+.macro pop pair
+  _sm83_push_pop $C1, pair
+.endmacro
+
+.macro jp flag, dst
+  .if .xmatch ({flag}, hl)
+    .if .blank ({dst})
+      .byte $E9
+    .else
+      .error "jp hl is not conditional"
+    .endif
+  .elseif .blank ({dst})
+    .byte $C3
+    .word flag
+  .else
+    _sm83_conditional $C2, flag
+    .word dst
+  .endif
+.endmacro
+
+.macro call flag, dst
+  .if .blank ({dst})
+    .byte $CD
+    .word flag
+  .else
+    _sm83_conditional $C4, flag
+    .word dst
+  .endif
+.endmacro
+
+.macro push pair
+  _sm83_push_pop $C5, pair
+.endmacro
+
+.macro rst in_dst, in_dst2
+  .local @dst
+  .if .blank({in_dst2})
+    @dst = in_dst
+    .assert @dst = @dst & $38, error, "rst: target out of range"
+    .byte @dst | $C7
+  .else
+    ; rst nc, $38 becomes jr nc, -1
+    @dst = in_dst2
+    .assert @dst = $38, error, "rst: only rst $38 is conditional"
+    _sm83_conditional $20, in_dst
+    .byte $FF
+  .endif
+.endmacro
+
+.macro reti
+  .byte $D9
+.endmacro
+
+.macro ldh dst, src
+  .if .xmatch ({src}, a)
+    .if .xmatch ({dst}, [c])
+      .byte $E2
+    .elseif .xmatch (.left (1, {dst}), [) && .xmatch (.right (1, {dst}), ])
+      .local @arg
+      @arg = .mid (1, .tcount ({dst})-2, {dst})
+      .assert @arg >= $FF00 && @arg <= $FFFF, error, "ldh: destination out of range"
+      .byte $E0
+      .byte .lobyte(@arg)
+    .else
+      .error "ldh: unknown destination"
+    .endif
+  .elseif .xmatch ({dst}, a)
+    .if .xmatch ({src}, [c])
+      .byte $F2
+    .elseif .xmatch (.left (1, {src}), [) && .xmatch (.right (1, {src}), ])
+      .local @arg
+      @arg = .mid (1, .tcount ({src})-2, {src})
+      .assert @arg >= $FF00 && @arg <= $FFFF, error, "ldh: source out of range"
+      .byte $F0
+      .byte .lobyte(@arg)
+    .else
+      .error "ldh: unknown source"
+    .endif
+  .else
+    .error "ldh: must be to or from A"
+  .endif
+.endmacro
+
+.macro di
+  .byte $F3
+.endmacro
+
+.macro ei
+  .byte $FB
+.endmacro
+
+.macro rlc src
+  .byte $CB
+  _sm83_regsrc $00, , src
+.endmacro
+
+.macro rrc src
+  .byte $CB
+  _sm83_regsrc $08, , src
+.endmacro
+
+.macro rl src
+  .byte $CB
+  _sm83_regsrc $10, , src
+.endmacro
+
+.macro rr src
+  .byte $CB
+  _sm83_regsrc $18, , src
+.endmacro
+
+.macro sla src
+  .byte $CB
+  _sm83_regsrc $20, , src
+.endmacro
+
+.macro sra src
+  .byte $CB
+  _sm83_regsrc $28, , src
+.endmacro
+
+.macro swap src
+  .byte $CB
+  _sm83_regsrc $30, , src
+.endmacro
+
+.macro srl src
+  .byte $CB
+  _sm83_regsrc $38, , src
+.endmacro
+
+.macro bit place, src
+  _sm83_bit $40, place, src
+.endmacro
+
+.macro res place, src
+  _sm83_bit $80, place, src
+.endmacro
+
+.macro set place, src
+  _sm83_bit $C0, place, src
+.endmacro
+
+.macro mov dst, src
+  ld dst, src
+.endmacro
+
+.macro djnz target
+  dec b
+  jr nz, target
+.endmacro
+
+.endif  ; _sm83_INCLUDED

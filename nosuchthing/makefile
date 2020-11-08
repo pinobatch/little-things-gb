@@ -1,99 +1,100 @@
-#!/usr/bin/make -f
-#
-# Makefile for No Such Thing ROM
-# Copyright 2014-2020 Damian Yerrick
-#
-# Copying and distribution of this file, with or without
-# modification, are permitted in any medium without royalty
-# provided the copyright notice and this notice are preserved.
-# This file is offered as-is, without any warranty.
-#
+# Makefile for building Game Boy software with 
+# Copyright 2019 Damian Yerrick
+# (insert zlib license here)
 
-# Used in the title of the zipfile and .gb executable
-title:=nosuchthing
-version:=0.01
+title   := nosuchthing
+version := 0.02wip
+objlist := \
+  header gbmain gbppu gbpb16 gbiur
 
-# Space-separated list of asm files without .z80 extension
-# (use a backslash to continue on the next line)
-objlist := header main ppuclear unpb16 uniur
-pngfile := tilesets/NoSuchThingAsNintendo.png
+objdir := obj/gb
+srcdir := src
+imgdir := tilesets
 
+CA65 := ca65
+LD65 := ld65
+
+# Flags for native tools written in C
+CC := gcc
+CFLAGS := -std=gnu99 -Wall -Wextra -DNDEBUG -Os
+
+# Flags that vary between Windows and POSIX build environments
 ifdef COMSPEC
-  ifndef GBEMU
-    GBEMU := start ""
-  endif
-  PY := py -3
+PY:=py -3
+DOTEXE:=.exe
 else
-  ifndef GBEMU
-    GBEMU := ~/.wine/drive_c/Program\ Files\ \(x86\)/bgb/bgb.exe
-  endif
-  PY := python3
+PY:=python3
+DOTEXE:=
 endif
 
-.SUFFIXES:
-.PHONY: run all dist zip
+# phony targets
 
-run: $(title).gb
-	$(GBEMU) $<
+.PHONY: run all dist zip clean
+
+run: $(title).gb $(title).sym
+	wine "$(HOME)/.wine/drive_c/Program Files (x86)/bgb/bgb.exe" $<
+
 all: $(title).gb
 
-clean:
-	-rm obj/gb/*.z80 obj/gb/*.o obj/gb/*.iu obj/gb/*.chrgb
-
-# Packaging
-
 dist: zip
+
 zip: $(title)-$(version).zip
 
-# The zipfile depends on every file in zip.in, but as a shortcut,
-# mention only files on which the ROM doesn't itself depend.
-$(title)-$(version).zip: zip.in $(title).gb \
-  README.md CHANGES.txt obj/gb/index.txt
-	$(PY) tools/zipup.py $< $(title)-$(version) -o $@
-	-advzip -z3 $@
+clean:
+	-rm tools/pb8$(DOTEXE) $(objdir)/*.o $(objdir)/*.2b $(objdir)/*.iu
+	-rm $(title).dbg $(title).sym
 
-# Build zip.in from the list of files in the Git tree
-zip.in: makefile
-	git ls-files | grep -e "^[^.]" | grep -ve "^src/gg" | grep -ve "^README.md" > $@
-	echo $(title).gb >> $@
-	echo zip.in >> $@
+# incbins and other dependencies
+$(objdir)/gbmain.o: $(objdir)/NoSuchThingAsNintendo.iu
 
-obj/gb/index.txt: makefile
-	echo "Files produced by build tools go here. (This file's existence forces the unzip tool to create this folder.)" > $@
+# Building native tools
+.SECONDARY: tools/pb8$(DOTEXE)
 
-# The ROM
-
-objlisto = $(foreach o,$(objlist),obj/gb/$(o).o)
-
-$(title).gb: $(objlisto)
-	rgblink -p 0xFF -m$(title).map -n$(title).sym -o$@ $^
-	rgbfix -p 0xFF -v $@
-
-obj/gb/%.o: obj/gb/%-dedent.z80 src/hardware.inc src/global.inc
-	rgbasm -o $@ $<
-
-obj/gb/%.o: obj/gb/%.z80
-	rgbasm -o $@ $<
-
-obj/gb/%-dedent.z80: src/%.z80
-	$(PY) tools/bgrdedent.py -o $@ $<
-
-# Files that will be included with incbin
-
-obj/gb/main.o: obj/gb/NoSuchThingAsNintendo.iu
+tools/%$(DOTEXE): tools/%.c
+	$(CC) -static $(CFLAGS) -o $@ $^
 
 # Graphics conversion
 
-# .chrgb (CHR data for Game Boy) denotes the 2-bit tile format
-# used by Game Boy and Game Boy Color, as well as Super NES
-# mode 0 (all planes), mode 1 (third plane), and modes 4 and 5
-# (second plane).
-obj/gb/%.chrgb: tilesets/%.png
+# .2b denotes the 2-bit tile format used by Game Boy and
+# Game Boy Color, as well as Super NES mode 0 (all planes),
+# mode 1 (third plane), and modes 4 and 5 (second plane).
+obj/gb/%.2b: tilesets/%.png
 	rgbgfx -o $@ $<
 
-obj/gb/%.iu: obj/gb/%.chrgb
+obj/gb/%.iu: obj/gb/%.2b
 	$(PY) tools/incruniq.py $< $@
 
 %.pb16: tools/pb16.py %
 	$(PY) $^ $@
-	
+
+# assembly
+$(objdir)/%.o: $(srcdir)/%.z80 $(srcdir)/sm83isa.mac $(srcdir)/gbhardware.inc $(srcdir)/gbglobal.inc
+	ca65 -g -o $@ $<
+
+# linking
+
+# Use .INTERMEDIATE to create a serial bottleneck, working around
+# GNU Make's inconvenient handling of multiple outputs in parallel
+# Thanks to Ivan Zaentsev https://stackoverflow.com/a/47951465/2738262
+.INTERMEDIATE: rom_and_dbg
+rom_and_dbg: diglot.cfg $(foreach o,$(objlist),$(objdir)/$(o).o)
+	ld65 -o $(title).gb --dbgfile $(title).dbg -C $^
+	$(PY) tools/gbheader.py -vj -k "mm" -l 0x33 -m 0 -n 0 -p 0xFF -t "CA83DEMO" -r 0 $(title).gb
+
+$(title).dbg $(title).gb: rom_and_dbg
+	touch $@
+
+# debug file generation
+%.sym: %.dbg
+	$(PY) tools/dbgtosym.py $< > $@
+
+# Packaging
+$(objdir)/index.txt: makefile
+	echo "This file ensures creation of this directory" > $@
+
+# This dependency list approximates "every file in zip.in"
+$(title)-$(version).zip: \
+  zip.in $(title).gb $(objdir)/index.txt README.md
+	$(PY) tools/zipup.py $< $(title) -o $@
+	-advzip -z2 $@
+

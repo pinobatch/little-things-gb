@@ -1,16 +1,17 @@
-include "src/hardware.inc"
-include "src/global.inc"
+.macpack sm83isa
+.include "gbhardware.inc"
+.include "gbglobal.inc"
+.export reset_handler
 
-; For the purpose of hLocals, see a fairly long rant in global.inc
-section "hram_locals", HRAM[hLocals]
-  ds locals_size
+.segment "HRAM"
+hLocals: .res locals_size
 
-STACK_SIZE EQU 64
-section "stack", WRAM0[$D000-STACK_SIZE]
-stack_top: ds STACK_SIZE
+STACK_SIZE = 64
+.segment "GBBSS"
+stack_top: .res STACK_SIZE
 
-section "main", ROM0
-reset_handler::
+.segment "CODE"
+.proc reset_handler
   di  ; Disable interrupts
   ld sp, stack_top + STACK_SIZE  ; Set up stack pointer (full descending)
 
@@ -22,7 +23,7 @@ reset_handler::
   ; another castle 
 
   ; Rendering can be turned off only during blanking.
-  call busy_wait_vblank
+  call GB_busy_wait_vblank
   xor a
   ldh [rLCDC], a  ; turn off rendering
   ldh [rNR52], a  ; disable (and reset) audio
@@ -37,11 +38,11 @@ reset_handler::
   
   ld de,NoSuchThingAsNintendo_iu
   ld hl,CHRRAM0
-  call unpack_iu_file
+  call GB_unpack_iu_file
   ld hl,SCRN_TMP
   ld de,_SCRN0 + 32
   ld bc, $130E
-  call load_nam
+  call GB_load_nam
 
   ld a,%00011011
   ldh [rBGP],a
@@ -51,6 +52,7 @@ reset_handler::
 forever:
   halt
   jr forever
+.endproc
 
-section "main_gfx", ROM0
-NoSuchThingAsNintendo_iu:  incbin "obj/gb/NoSuchThingAsNintendo.iu"
+.segment "RODATA"
+NoSuchThingAsNintendo_iu:  .incbin "../obj/gb/NoSuchThingAsNintendo.iu"

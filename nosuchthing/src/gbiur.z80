@@ -28,48 +28,47 @@
 ;         1    10  Repeat last tile ID
 ;         X    11  Literal tile number follows in next full byte
 
-include "src/hardware.inc"
-include "src/global.inc"
+.macpack sm83isa
+.include "gbhardware.inc"
+.include "gbglobal.inc"
 
 ;;
 ; 7/8 of the time, it takes 5 cycles
 ; The other 1/8, it takes 10 cycles
-getbit: macro
+.macro getbit
+.local nonewbyte
   sla b
   ; Once out of bits, CF is 1 and B is 0
-  jr nz, .nonewbyte\@
+  jr nz, nonewbyte
     ld b, [hl]
     inc hl
     rl b
-  .nonewbyte\@:
-  endm
+  nonewbyte:
+.endmacro
 
-hBytesLeftHi = hLocals + $00
-hInNewRun    = hLocals + $01
-hMaxTile     = hLocals + $02
-hPrevTile    = hLocals + $03
-
-SECTION "incruniq", ROM0
+.segment "CODE"
 
 ;;
 ; Unpack IU file at DE to tiles at HL and map at SCRN_TMP
-unpack_iu_file::
+.proc GB_unpack_iu_file
   ld a,[de]  ; Fetch tile count
   inc de
   ld b,a
-  call pb16_unpack_block
+  call GB_pb16_unpack_block
 
   ld h, d
   ld l, e
   ; fall through
+.endproc
 
-iur_unpack_2hl_bytes::
+.proc iur_unpack_2hl_bytes
   ld a, [hl+]  ; Fetch tilemap size
   ; fall through
+.endproc
 
 ;;
 ; Unpack 2*A bytes of IUR map data from HL to SCRN_TMP
-iur_unpack_2a_bytes::
+.proc iur_unpack_2a_bytes
   ld c, a    ; and double it
   xor a
   sla c
@@ -79,6 +78,7 @@ iur_unpack_2a_bytes::
   ld de, SCRN_TMP
   xor a
   ; fall through
+.endproc
 
 ;;
 ; Decompress IUR tilemap data
@@ -90,7 +90,11 @@ iur_unpack_2a_bytes::
 ; @param A starting tile ID (e.g. $80 for $8800 VRAM)
 ; (N.B.: this is broken, but fixed in the SMS version)
 ; @return HL: end of source; DE: end of destination
-iur_unpack::
+.proc iur_unpack
+hBytesLeftHi = hLocals + $00
+hInNewRun    = hLocals + $01
+hMaxTile     = hLocals + $02
+hPrevTile    = hLocals + $03
 
   ; Initial codec state
   ldh [hMaxTile], a
@@ -107,45 +111,47 @@ iur_unpack::
 
   ; Prime bit fetcher loop
   scf
-  jr .byteloop+4
-.byteloop:
+  jr byteloop+4
+byteloop:
   ; 0: same runtype
   getbit
   ldh a, [hInNewRun]
-  jr nc, .do_runtype_a
+  jr nc, do_runtype_a
 
   ; 10: opposite runtype
   getbit
   inc a
   ldh [hInNewRun], a
-  jr nc, .do_runtype_a
+  jr nc, do_runtype_a
 
   ; 11: Read literal byte and go to runtype 0
   xor a
   ldh [hInNewRun], a
   ld a, [hl+]
-  jr .write_byte_a
+  jr write_byte_a
 
-.do_runtype_a:
+do_runtype_a:
   ; Runtype 0: same as previous tile
   rra
-  jr nc, .is_repeat
+  jr nc, is_repeat
   ; Runtype 1: Write 1 more than last runtype 1 tile
   ldh a, [hMaxTile]
   inc a
   ldh [hMaxTile], a
-  db $D2 ; was jr .write_byte_a, now jp nc, dont_care
+  .byte $D2 ; was jr .write_byte_a, now jp nc, dont_care
 
-.is_repeat:
+is_repeat:
   ldh a, [hPrevTile]
-.write_byte_a:
+write_byte_a:
   ldh [hPrevTile], a
   ld [de], a
   inc de
   dec c
-  jr nz, .byteloop
+  jr nz, byteloop
   ldh a, [hBytesLeftHi]
   dec a
   ldh [hBytesLeftHi], a
-  jr nz, .byteloop
+  jr nz, byteloop
   ret
+.endproc
+

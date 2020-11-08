@@ -19,15 +19,16 @@
 ;    misrepresented as being the original software.
 ; 3. This notice may not be removed or altered from any source distribution.
 ;
-include "src/hardware.inc"
-include "src/global.inc"
+.macpack sm83isa
+.include "gbhardware.inc"
+.include "gbglobal.inc"
 
-SECTION "busy_wait_vblank", ROM0
+.segment "CODE"
 
 ;;
 ; Waits for forced blank (rLCDC bit 7 clear) or vertical blank
 ; (rLY >= 144).  Use before VRAM upload or before clearing rLCDC bit 7.
-busy_wait_vblank::
+.proc GB_busy_wait_vblank
   ; If rLCDC bit 7 already clear, we're already in forced blanking
   ldh a,[rLCDC]
   rlca
@@ -38,37 +39,37 @@ busy_wait_vblank::
   ; This differs from Super NES, where the first visible line is 1,
   ; and NES, which has a post-render line numbered 240 between
   ; picture and vblank.
-.wait:
+wait:
   ldh a, [rLY]
   cp 144
-  jr c, .wait
+  jr c, wait
   ret
-
-SECTION "load_nam", ROM0
+.endproc
 
 ;;
 ; Copies a B column by C row tilemap from HL to screen at DE.
-load_nam::
+.proc GB_load_nam
   push bc
   push de
-  .byteloop:
+  byteloop:
     ld a,[hl+]
     ld [de],a
     inc de
     dec b
-    jr nz,.byteloop
+    jr nz, byteloop
 
   ; Move to next screen row
   pop de
   ld a,32
   add e
   ld e,a
-  jr nc,.no_inc_d
+  jr nc, no_inc_d
     inc d
-  .no_inc_d:
+  no_inc_d:
 
   ; Restore width; do more rows remain?
   pop bc
   dec c
-  jr nz,load_nam
+  jr nz, GB_load_nam
   ret
+.endproc
