@@ -111,6 +111,9 @@ def parse_argv(argv):
                    "and clear old publisher (0x14B=0x33)")
     p.add_argument("-l", "--old-publisher", type=parse_byte_value,
                    help="set old publisher at 0x14B (ignored with -k or -s)")
+    p.add_argument("-M", "--dmg",
+                   dest="gbcmode", action='store_const', const=0x00,
+                   help="mark as Game Boy mode (0x143=0x00)")
     p.add_argument("-m", "--mapper", "--mbc", metavar="mbc_type",
                    type=parse_mapper,
                    help="set mapper type at 0x147 (name or number)")
