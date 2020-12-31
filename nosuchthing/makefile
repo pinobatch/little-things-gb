@@ -97,11 +97,11 @@ $(title).dbg $(title).gb: rom_and_dbg
 	touch $@
 
 $(title).gg: $(title).gb
-	ln $< $@
+	ln -sf $< $@
 
 # debug file generation
 %.sym: %.dbg
-	$(PY) tools/dbgtosym.py $< > $@
+	$(PY) tools/dbgtosym.py -o $@ $<
 
 # Packaging
 $(gbobjdir)/index.txt: makefile

@@ -79,7 +79,7 @@ $(title).dbg $(title).gb: rom_and_dbg
 
 # debug file generation
 %.sym: %.dbg
-	$(PY) tools/dbgtosym.py $< > $@
+	$(PY) tools/dbgtosym.py -o $@ $<
 
 # Packaging
 $(objdir)/index.txt: makefile
