@@ -176,6 +176,7 @@ rst00:
   ld sp, stack_top + STACK_SIZE
   jr init_part2
 .res rst00+$08-*
+
 rst08:
   ret
 .res rst00+$10-*
@@ -275,21 +276,26 @@ ggmain:
   ld hl,PaletteData
   ld bc,(PaletteDataEnd-PaletteData)*256+VDPDATA
   otir
+  ld hl,PaletteData
   ld b,(PaletteDataEnd-PaletteData)
   otir
   call vdp_clear_nt
+
+  ; Load CHR
   vdp_seek_tile 0
-  ld b, 8
-  ld a, $20
+  ld hl, Gear4b
+  ld d, (Gear4bEnd-Gear4b)/32
   :
-    cpl
-    out [VDPDATA],a
-    cpl
-    out [VDPDATA],a
-    out [VDPDATA],a
-    out [VDPDATA],a
-    rrca
-    djnz :-
+    ld bc, 32*256+VDPDATA
+    otir
+    dec d
+    jr nz, :-
+
+  ; Fill the nametable
+  ldxy de, 6, 5
+  lb bc, 20, 15
+  ld hl, GearNam
+  call vdp_load_nam
 
   ; Turn screen on
   ld a,MODEF_ON|MODEF_VIRQ
@@ -322,23 +328,43 @@ ggmain:
   ret
 .endproc
 
+;;
+; Copies a rectangular region of tilemap to the VDP.
+; @param B width of tilemap data in 8-pixel columns
+; @param C height of tilemap data in 8-pixel rows
+; @param DE top left corner of destination in VRAM ($7800-$7EFF)
+; @param HL start of source data, 1 byte per column
+; @return DE below the bottom left corner; HL at next; B unchanged; C=0
+.proc vdp_load_nam
+  push bc
+  ld a, e
+  out [VDPCTRL], a
+  add 64
+  ld e, a
+  ld a, d
+  out [VDPCTRL], a
+  adc 0
+  ld d, a
+  :
+    ld a, [hl]
+    out [VDPDATA], a
+    inc hl
+    xor a
+    out [VDPDATA], a
+    djnz :-
+  pop bc
+  dec c
+  jr nz, vdp_load_nam
+  ret
+.endproc
+
+
 .rodata
-PaletteData:
-  drgb $000000
-  drgb $0000A0
-  drgb $00A000
-  drgb $00A0A0
-  drgb $A00000
-  drgb $A000A0
-  drgb $A05000
-  drgb $A0A0A0
-  drgb $505050
-  drgb $5050F0
-  drgb $50F050
-  drgb $50F0F0
-  drgb $F05050
-  drgb $F050F0
-  drgb $F0F050
-  drgb $F0F0F0
+PaletteData: .incbin "obj/gg/Gear.pal"
 PaletteDataEnd:
+
+Gear4b: .incbin "obj/gg/Gear.u.4b"
+Gear4bEnd:
+
+GearNam: .incbin "obj/gg/Gear.nam"
 
