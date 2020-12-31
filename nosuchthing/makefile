@@ -4,11 +4,15 @@
 
 title   := nosuchthing
 version := 0.02wip
-objlist := \
+gbobjlist := \
   header gbmain gbppu gbpb16 gbiur
+ggobjlist := \
+  start
 
-objdir := obj/gb
-srcdir := src
+gbobjdir := obj/gb
+gbsrcdir := src
+ggobjdir := obj/gg
+ggsrcdir := src/gg
 imgdir := tilesets
 
 CA65 := ca65
@@ -30,6 +34,9 @@ endif
 # phony targets
 
 .PHONY: run all dist zip clean
+
+ggrun: $(title).gg $(title).sym
+	"$(HOME)/develop/meka/meka/meka" $<
 
 run: $(title).gb $(title).sym
 	wine "$(HOME)/.wine/drive_c/Program Files (x86)/bgb/bgb.exe" $<
@@ -58,17 +65,19 @@ tools/%$(DOTEXE): tools/%.c
 # .2b denotes the 2-bit tile format used by Game Boy and
 # Game Boy Color, as well as Super NES mode 0 (all planes),
 # mode 1 (third plane), and modes 4 and 5 (second plane).
-obj/gb/%.2b: tilesets/%.png
+$(gbobjdir)/%.2b: tilesets/%.png
 	rgbgfx -o $@ $<
 
-obj/gb/%.iu: obj/gb/%.2b
+$(gbobjdir)/%.iu: $(gbobjdir)/%.2b
 	$(PY) tools/incruniq.py $< $@
 
 %.pb16: tools/pb16.py %
 	$(PY) $^ $@
 
 # assembly
-$(objdir)/%.o: $(srcdir)/%.z80 $(srcdir)/sm83isa.mac $(srcdir)/gbhardware.inc $(srcdir)/gbglobal.inc
+$(gbobjdir)/%.o: $(gbsrcdir)/%.z80 $(gbsrcdir)/sm83isa.mac $(gbsrcdir)/gbhardware.inc $(gbsrcdir)/gbglobal.inc
+	ca65 -g -o $@ $<
+$(ggobjdir)/%.o: $(ggsrcdir)/%.z80 $(ggsrcdir)/z80isa.mac
 	ca65 -g -o $@ $<
 
 # linking
@@ -77,24 +86,33 @@ $(objdir)/%.o: $(srcdir)/%.z80 $(srcdir)/sm83isa.mac $(srcdir)/gbhardware.inc $(
 # GNU Make's inconvenient handling of multiple outputs in parallel
 # Thanks to Ivan Zaentsev https://stackoverflow.com/a/47951465/2738262
 .INTERMEDIATE: rom_and_dbg
-rom_and_dbg: diglot.cfg $(foreach o,$(objlist),$(objdir)/$(o).o)
+objlisto := \
+  $(foreach o,$(gbobjlist),$(gbobjdir)/$(o).o) \
+  $(foreach o,$(ggobjlist),$(ggobjdir)/$(o).o)
+rom_and_dbg: diglot.cfg $(objlisto)
 	ld65 -o $(title).gb --dbgfile $(title).dbg -C $^
-	$(PY) tools/gbheader.py -vj -k "mm" -l 0x33 -m 0 -n 0 -p 0xFF -t "CA83DEMO" -r 0 $(title).gb
+	$(PY) tools/gbheader.py -vj -k "mm" -l 0x33 -m 0 -n 0 -p 0xFF -t "FOR GAME GEAR" -r 0 $(title).gb
 
 $(title).dbg $(title).gb: rom_and_dbg
 	touch $@
+
+$(title).gg: $(title).gb
+	ln $< $@
 
 # debug file generation
 %.sym: %.dbg
 	$(PY) tools/dbgtosym.py $< > $@
 
 # Packaging
-$(objdir)/index.txt: makefile
+$(gbobjdir)/index.txt: makefile
+	echo "This file ensures creation of this directory" > $@
+
+$(ggobjdir)/index.txt: makefile
 	echo "This file ensures creation of this directory" > $@
 
 # This dependency list approximates "every file in zip.in"
 $(title)-$(version).zip: \
-  zip.in $(title).gb $(objdir)/index.txt README.md
+  zip.in $(title).gb $(gbobjdir)/index.txt $(ggobjdir)/index.txt README.md
 	$(PY) tools/zipup.py $< $(title) -o $@
 	-advzip -z2 $@
 

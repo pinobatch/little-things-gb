@@ -1,0 +1,302 @@
+; Game Gear header in progress!
+
+.macpack z80isa
+
+; IO ports
+
+PSG       = $7E
+VDPLY     = $7E
+VDPLX     = $7F
+VDPDATA   = $BE
+VDPCTRL   = $BF
+VDPSTATUS = $BF
+JOYLO     = $DC
+JOYHI     = $DD
+
+; JOYLO bits
+PADB_2       = 5
+PADB_1       = 4
+PADB_RIGHT   = 3
+PADB_LEFT    = 2
+PADB_DOWN    = 1
+PADB_UP      = 0
+PADF_1       = 1<<PADB_1
+PADF_2       = 1<<PADB_2
+PADF_RIGHT   = 1<<PADB_RIGHT
+PADF_LEFT    = 1<<PADB_LEFT
+PADF_DOWN    = 1<<PADB_DOWN
+PADF_UP      = 1<<PADB_UP
+
+
+; SMS VDP register definitions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;
+; The VDP has a 16-bit address space.
+; 0000-3FFF: Read VRAM (autoinc 1)
+; 4000-7FFF: Write VRAM (autoinc 1)
+; 8000-8AFF: Set register H to value L
+; C000-C01F: Write CRAM (autoinc 1)
+;
+; To write to a VDP register, write the value to VDPCTRL
+; then the register number ($80-$8A) to VDPCTRL.
+
+.macro vdp_seek dst
+  ld a, <(dst)
+  out [VDPCTRL], a
+  ld a, >(dst)
+  out [VDPCTRL], a
+.endmacro
+
+.macro vdp_seek_xy xcoord, ycoord
+  vdp_seek $7800 + (xcoord) * 2 + (ycoord) * 64
+.endmacro
+
+.macro vdp_seek_tile tilenum
+  vdp_seek $4000 + (tilenum) * 32
+.endmacro
+
+;;
+; Syntax: ldxy rp, xpos, ypos[, mapbase]
+; Sets a register pair to the address of (x, y) tile coordinates
+; within a tilemap.
+; @param rp a register pair (BC, DE, HL)
+; @param x horizontal distance in tiles from left (0-31)
+; @param y vertical distance in tiles from top (0-27)
+.macro ldxy regpair, xcoord, ycoord
+  ld regpair, $7800 + (xcoord) * 2 + (ycoord) * 64
+.endmacro
+
+VDPMASK      = $80
+MASKB_RFIX   = 7  ; disable vertical scrolling for columns 24-31
+MASKB_TFIX   = 6  ; disable horizontal scrolling for rows 0-1
+MASKB_LCLIP  = 5  ; draw left 8 pixels with border color (like NES)
+MASKB_HIRQ   = 4  ; call interrupt $38 at start of hblank
+MASKB_OBJL8  = 3  ; move all sprites left by 8 pixels (like GB)
+MASKB_4BPP   = 2  ; use Mark III/Game Gear video mode (not TMS9918 compat)
+MASKB_GRAY   = 0  ; emit no color burst (mehikon mode)
+MASKF_RFIX   = 1<<MASKB_RFIX
+MASKF_TFIX   = 1<<MASKB_TFIX
+MASKF_LCLIP  = 1<<MASKB_LCLIP
+MASKF_HIRQ   = 1<<MASKB_HIRQ
+MASKF_OBJL8  = 1<<MASKB_OBJL8
+MASKF_4BPP   = 1<<MASKB_4BPP
+MASKF_GRAY   = 1<<MASKB_GRAY
+
+VDPMODE      = $81
+MODEB_ON     = 6  ; 1: display; 0: blanking
+MODEB_VIRQ   = 5  ; call interrupt $38 at start of vblank
+MODEB_8X16   = 1  ; sprites are 16 pixels tall
+MODEB_MAG    = 0  ; pixel double all sprites
+MODEF_ON     = 1<<MODEB_ON
+MODEF_VIRQ   = 1<<MODEB_VIRQ
+MODEF_8X16   = 1<<MODEB_8X16
+MODEF_MAG    = 1<<MODEB_MAG
+
+; 7654 3210  VDP nametable address
+;      |||+- Must be 1
+;      +++-- Start of nametable in 2048-byte units ($0000, $0800, ..., $3800)
+;
+; The nametable is 28 rows of 32 16-bit words
+; FEDC BA98 7654 3210
+; |||| |||+-++++-++++- Tile address in 32-byte units
+; |||| ||+------------ Horizontal flip
+; |||| |+------------- Vertical flip
+; |||| +-------------- 0: Use CRAM $C000+; 1: Use CRAM $C010+
+; |||+---------------- Display opaque pixels in front of sprites
+; +++----------------- Application use
+VDPNTADDR = $82
+
+VDP83 = $83  ; Write $FF if not on SG-1000
+VDP84 = $84  ; Write $FF if not on SG-1000
+
+; 7654 3210  VDP sprite attribute table address
+;  ||| |||+- Must be 1
+;  +++-+++-- Start of sprite list in 256-byte units
+;
+; SAT $00-$3F are Y positions, with 0 meaning Y=1 like on NES
+; SAT $80, $82, $84, ..., $FE are X positions
+; SAT $81, $83, $85, ..., $FF are tile addresses in $20-byte units
+; Y=$D0 terminates the SAT
+VDPSATADDR  = $85
+NUM_SPRITES = 64
+
+; 7654 3210
+;       |++- Must be 1
+;       +--- Start of sprite pattern table ($0000 or $2000)
+VDPOBSEL = $86
+
+VDPBORDER = $87  ; Offset into CRAM ($10-$1F) used to draw border
+
+; Horizontal scroll position, per scanline.  Adding 1 to SCX shifts
+; all pixels to the right, which is backwards from how background
+; scrolling works on Nintendo consoles and more similar to sprites.
+VDPSCX = $88
+
+; Vertical scrolling is not inverted; adding 1 shifts everything up.
+; But changes are delayed to the next frame, ruling out not only the
+; Demotronic trick but also Rad Racer hills.  Even status bars are
+; a pain.
+VDPSCY = $89
+
+; Scanline-counting timer that works a little like MMC3's
+VDPPIT = $8A
+
+; The bits of VDPSTATUS are analogous to NES $2002, but in
+; bit order 75600000
+; NES clears vblank, over, and hit at end of vblank.  GG doesn't.
+; GG clears vblank, over, and hit on status read.  NES clears vblank.
+; Like NES, reads clear the first/second write
+STATB_VBLANK = 7  ; true if vblank has begun
+STATB_OVER   = 6  ; true if 9 sprites have been seen on a line
+STATB_HIT    = 5  ; true if two sprites' opaque pixels have overlapped
+STATF_VBLANK = 1<<STATB_VBLANK
+STATF_OVER   = 1<<STATB_OVER
+STATF_HIT    = 1<<STATB_HIT
+
+; Color palette definition
+.macro drgb value
+  .word (((value) & $F00000) >> 20) | (((value) & $F000) >> 8) | (((value) & $F0) << 4)
+.endmacro
+
+.macro lb regpair, highvalue, lowvalue
+  ld regpair, (highvalue)*256+(lowvalue)
+.endmacro
+
+; End candidate header ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+.segment "TMRFOOTER"
+; Game Gear software need not contain a correct checksum.
+.byte "TMR SEGA"
+
+.segment "LOWROM00"
+rst00:
+  ; Configure interrupt mode and stack
+  ; First 8 bytes so we can leave RST $08-$30 free for other purposes
+  di
+  im 1
+  ld sp, stack_top + STACK_SIZE
+  jr init_part2
+.res rst00+$08-*
+rst08:
+  ret
+.res rst00+$10-*
+rst10:
+  ret
+.res rst00+$18-*
+rst18:
+  ret
+.res rst00+$20-*
+rst20:
+  ret
+.res rst00+$28-*
+rst28:
+  ret
+.res rst00+$30-*
+rst30:
+  ret
+.res rst00+$38-*
+
+; On Game Boy, RST $40 through $66 are the IRQ handlers, and
+; RST $38 is a good place for an error handler.
+; On Game Gear, RST $38 is the IRQ handler.
+rst38:
+  push af
+  ld a, [nmis]
+  inc a
+  jp gg_irq_handler_tail
+
+; Game Boy interrupt handlers
+.res rst00+$40-*
+rst40:
+  .byte $D9
+.res rst00+$48-*
+rst48:
+  .byte $D9
+.res rst00+$50-*
+rst50:
+  .byte $D9
+.res rst00+$58-*
+rst58:
+  .byte $D9
+.res rst00+$60-*
+rst60:
+  .byte $D9
+.res rst00+$66-*
+
+; Mark III uses NMI at $0066 for the pause button handler
+; Game Gear exposes Start as an ordinary button
+pause_handler:
+  retn
+
+init_part2:
+  ; Put the VDP into mode 4, with NT at $7800 and SAT at $7F00.
+  ; There's no dance of waiting 2 frames for the VDP to wake up.
+  ld hl,vdp_regvalues
+  ld bc,(vdp_regvalues_end-vdp_regvalues)*256+VDPCTRL  ; B: count; C: output port
+  otir  
+  jp ggmain
+
+gg_irq_handler_tail:
+  ld [nmis], a
+  in a, [VDPSTATUS]
+  pop af
+  ei
+  reti
+
+
+.rodata
+vdp_regvalues:
+  .byte MASKF_4BPP,VDPMASK
+  .byte $00,VDPMODE
+  .byte $ff,VDPNTADDR
+  .byte $ff,VDPSATADDR
+  .byte $07,VDPOBSEL
+  .byte $ff,VDPBORDER
+  .byte $00,VDPSCX
+  .byte $00,VDPSCY
+  .byte $ff,VDPPIT
+vdp_regvalues_end:
+
+.bss
+STACK_SIZE = 60
+.export cur_keys, new_keys, nmis, sat_used
+.align 256
+stack_top:   .res STACK_SIZE
+cur_keys:    .res 1
+new_keys:    .res 1
+nmis:        .res 1
+sat_used:    .res 1  ; SAT fill level: $40 minimum, $80 maximum
+sat_y:       .res NUM_SPRITES
+sat_xn:      .res NUM_SPRITES*2
+
+.code
+
+ggmain:
+  vdp_seek $C000
+  ld hl,PaletteData
+  ld bc,(PaletteDataEnd-PaletteData)*256+VDPDATA
+  otir
+  ld b,(PaletteDataEnd-PaletteData)
+  otir
+
+  :
+    jp :-
+
+.rodata
+PaletteData:
+  drgb $000000
+  drgb $0000A0
+  drgb $00A000
+  drgb $00A0A0
+  drgb $A00000
+  drgb $A000A0
+  drgb $A05000
+  drgb $A0A0A0
+  drgb $505050
+  drgb $5050F0
+  drgb $50F050
+  drgb $50F0F0
+  drgb $F05050
+  drgb $F050F0
+  drgb $F0F050
+  drgb $F0F0F0
+PaletteDataEnd:

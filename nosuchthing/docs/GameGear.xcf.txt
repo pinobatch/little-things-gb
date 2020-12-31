@@ -1,0 +1,5 @@
+GameGear.xcf is a color reduction by Damian Yerrick of a public
+domain photo of a Game Gear portable video game system taken by
+Evan-Amos as a part of Vanamo Media, which creates public domain
+works for educational purposes.
+<https://commons.wikimedia.org/wiki/File:Sega-Game-Gear-WB.png>

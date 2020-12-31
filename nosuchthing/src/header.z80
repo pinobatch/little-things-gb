@@ -24,11 +24,6 @@
 .include "gbglobal.inc"
 .import reset_handler
 
-; RSTs belong to the Game Gear program, not the Game Boy one.
-.segment "LOWROM00"
-  .res 64
-  reti
-
 .segment "LOWROM01"
   nop
   jp reset_handler
