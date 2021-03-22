@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
 ca65 .dbg to bgb .sym translator
 Copyright 2019, 2021 Damian Yerrick
