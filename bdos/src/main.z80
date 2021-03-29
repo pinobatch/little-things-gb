@@ -1,0 +1,13 @@
+section "main", ROM0
+
+main::
+  ld de, hello_msg
+  ld c, 9
+  call bdos
+  rst 0
+
+hello_msg:
+  db "This program uses", 10
+  db "the CALL 5 interface", 10
+  db "to say Hello world!", 0
+

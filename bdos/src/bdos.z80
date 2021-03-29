@@ -1,0 +1,486 @@
+include "src/hardware.inc"
+
+section "bdos_hram", HRAM
+nmis:: ds 1
+cur_keys:: ds 1
+new_keys:: ds 1
+
+section "bdos_wram", WRAM0
+bdos_delimit: ds 1
+das_keys:: ds 1
+das_timer:: ds 1
+bdos_cursor_x: ds 1
+bdos_cursor_y: ds 1
+
+section "stack", WRAM0, align[8]
+stack_top: ds 256
+stack_bottom:
+
+section "rst_0", ROM0[0]
+exit:
+  ld c, 0
+  nop
+  nop
+  nop
+bdos::
+  jp bdos_entry  ; CALL 5
+
+section "bdos_entry", ROM0
+;;
+; @param C syscall ID
+; @param DE syscall argument
+bdos_entry:
+  ld a, c
+  cp (syscalltable.end - syscalltable) / 2
+  jr nc, .special_syscall
+    ld b, 0
+    ld hl, syscalltable
+    add hl, bc
+    add hl, bc
+    ld a, [hl+]
+    ld h, [hl]
+    ld l, a
+    jp hl
+  .special_syscall:
+  cp 141
+  jr z, bdos_wait_de_frames
+  cp 110
+  jr z, bdos_set_delimit
+  cp 111
+  jr z, bdos_write_block
+  ret
+
+;;
+; LD C, 141 LD DE, num_frames CALL 5
+; Blocks the process for at least DE frames.
+bdos_wait_de_frames:
+  ld a, d
+  or e
+  ret z
+  dec de
+  inc d
+  inc e
+  .loop:
+    push de
+    call bdos_wait_vblank
+    pop de
+    dec e
+    jr nz, .loop
+    dec d
+    jr nz, .loop
+  ret
+
+;;
+; LD C, 110 LD E, $00 CALL 5
+; Sets the byte value that ends bios_puts data.
+; Defaults to $00 to match C convention.  This differs from CP/M
+; BDOS, where it defaulted to $24 ("$").
+; @param DE $FFFF to get current delimiter in A; other to set the
+; delimiter to E
+bdos_set_delimit:
+  ld a, d
+  or e
+  inc a
+  jr nz, .not_get
+    ld a, [bdos_delimit]
+    ret
+  .not_get:
+  ld a, e
+  ld [bdos_delimit], a
+  ret
+
+;;
+; LD C, 111 LD DE, addr_then_length CALL 5
+; @param DE address of a parameter block consisting of the
+; text begin address (16 bits) and length in bytes (16 bits)
+bdos_write_block:
+  ld a, [de]
+  ld l, a
+  inc de
+  ld a, [de]
+  ld h, a
+  inc de
+  ld a, [de]
+  ld c, a
+  inc de
+  ld a, [de]
+  ld b, a
+  or c
+  ret z
+
+  dec bc
+  inc b
+  inc c
+  .loop:
+    ld a, [hl+]
+    push hl
+    push bc
+    call putc_a
+    pop bc
+    pop hl
+    dec c
+    jr nz, .loop
+    dec b
+    jr nz, .loop
+  ret
+
+section "bdos_syscalltable", ROM0
+syscalltable:
+  dw bdos_exit
+  dw bdos_getc
+  dw bdos_putc
+  dw bdos_getc_aux  ; tape reader?
+  dw bdos_putc_aux  ; tape punch?
+  dw bdos_putc_prn  ; printer
+  dw bdos_rawio
+  dw bdos_kbhit_aux  ; FF if aux ready for reading; 0 if not
+  dw bdos_ready_aux  ; FF if aux ready for writing; 0 if not
+  dw bdos_puts       ; write ASCII text terminated by delimit
+
+  dw bdos_gets       ; DE points to insize, outside, buffer
+  dw bdos_kbhit      ; nonzero if character waiting; 0 if not
+  dw bdos_version    ; currently returns HL=0
+.end
+
+section "bdos_various_calls", ROM0
+bdos_exit:
+  .loop:
+    call bdos_wait_vblank
+    jr .loop
+
+bdos_getc:
+bdos_getc_aux:
+bdos_putc_aux:
+bdos_putc_prn:
+bdos_rawio:
+bdos_gets:
+  jp bdos_exit  ; Not yet implemented
+
+bdos_kbhit:
+bdos_kbhit_aux:
+bdos_ready_aux:
+  xor a
+  ret  ; Not yet implemented
+
+bdos_version:
+  ld hl, 0
+  ld a, l
+  ld b, h
+  ret
+
+section "bdos_putc", ROM0
+bdos_putc:
+  ld a, e
+putc_a:
+  cp $20
+  jr c, .control_character
+    ; Stay in bounds
+    ld e, a
+    ld a, [bdos_cursor_x]
+    cp 20
+    jr c, .not_newline
+      push de
+      call bdos_newline
+      pop de
+    .not_newline:
+
+    ; Calculate character address
+    ld a, [bdos_cursor_y]
+    ld b, a
+    ld l, a
+    ld h, _SCRN0>>10
+    add hl, hl
+    add hl, hl
+    ld a, [bdos_cursor_x]
+    or l
+    ld l, a
+
+    ; Write the character
+    .statwait:
+      ld a, [rSTAT]
+      and STATF_BUSY
+      jr nz, .statwait
+    ld [hl], e
+
+    ld hl, bdos_cursor_x
+    inc [hl]
+
+    ; Scroll into range
+    ld a, [rSCY]
+    ld c, a
+    ld a, b
+    sub c
+    cp 144
+    ret c
+    ld a, b
+    sub 136
+    ld [rSCY], a
+    ret
+  .control_character:
+  cp 8
+  jr nz, .not_backspace
+    ld a, [bdos_cursor_x]
+    or a
+    ret z
+    inc a
+    ld [bdos_cursor_x], a
+    ret
+  .not_backspace:
+  cp 13
+  jr z, bdos_cr
+  cp 10
+  jr z, bdos_newline
+  cp 12
+  jr z, bdos_cls
+  ret
+
+bdos_newline:
+  ; Move to next line
+  ld a, [bdos_cursor_y]
+  or 7
+  inc a
+  ld [bdos_cursor_y], a
+  ld b, a
+
+  ; Clear line
+  ld l, a
+  ld l, a
+  ld h, _SCRN0>>10
+  add hl, hl
+  add hl, hl
+  ld c, 20/2
+  ld e, " "
+  xor a
+  .clreol_loop:
+    .statwait:
+      ld a, [rSTAT]
+      and STATF_BUSY
+      jr nz, .statwait
+    ld [hl], e
+    inc l
+    ld [hl], e
+    inc l
+    dec c
+    jr nz, .clreol_loop
+  ; fall through to bdos_cr
+
+bdos_cr:
+  xor a
+  ld [bdos_cursor_x], a
+  ret
+
+bdos_cls:
+  call lcd_off
+  xor a
+  ld hl, bdos_cursor_x
+  ld [hl+], a  ; clear X, Y
+  ld [hl+], a
+  ldh [rSCX], a
+  ldh [rSCY], a
+  ld hl, _SCRN0
+  ld e, a
+  ld a, " "
+  .loop
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    inc e
+    jr nz, .loop
+  ldh [rIF], a
+  ld a, IEF_VBLANK
+  ldh [rIE], a
+  ld a, %11111100
+  ld [rBGP], a
+  ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8800|LCDCF_BG9800
+  ld [rLCDC], a
+  ret
+
+section "bdos_puts", ROM0
+bdos_puts:
+  ld h, d
+  ld l, e
+  .loop:
+    ld a, [bdos_delimit]
+    xor [hl]
+    ret z
+    ld a, [hl+]
+    push hl
+    call putc_a
+    pop hl
+    jr .loop
+
+section "bdos_wait_vblank", ROM0
+bdos_wait_vblank:
+  ld hl,nmis
+  ld a,[hl]
+  .loop:
+    halt
+    cp [hl]
+    jr z, .loop
+  ret
+
+
+; Game Boy initialization ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+section "bdos_init", ROM0[$0100]
+  nop
+  jp init
+  ds $4C, 0  ; leave space for RGBFIX to insert a header
+init:
+  di
+  ld sp, stack_bottom
+  xor a
+  ld hl, nmis
+  ld [hl+], a
+  ld [hl+], a
+  ld [hl+], a
+  ld hl, bdos_delimit
+  ld [hl+], a
+  ld [hl+], a
+  ld [hl+], a
+
+  call lcd_off
+  ld de, bdos_font  ; start of font data
+  ld bc, bdos_font.end - bdos_font  ; length of font data
+  ld hl, $9200     ; start of tile VRAM
+  call load_1bpp_font
+  call bdos_cls
+  ei
+  jp main
+
+section "bdos_lcd_off", ROM0
+lcd_off:
+  ld a, [rLCDC]
+  add a
+  ret nc
+  .vwaitloop:
+    ldh a, [rLY]
+    xor 144
+    jr nz, .vwaitloop
+  ldh [rLCDC], a
+  ret
+
+section "fontloader", ROM0
+;;
+; @param DE pointer to font data
+; @param HL pointer to video memory destination
+; @param BC number of bytes of font data to use
+load_1bpp_font:
+  dec bc
+  inc b
+  inc c
+
+  ; Each subroutine gets its own set of local labels, which start
+  ; with a period.  Using local labels makes it less likely that you
+  ; will accidentally write a loop that jumps into an unrelated loop.
+  .loop
+    ld a, [de]   ; Copy one byte of font data to VRAM
+    inc de
+    ld [hl+], a
+    xor a        ; And make the other plane blank
+    ld [hl+], a
+    dec c
+    jr nz, .loop
+    dec b
+    jr nz, .loop
+  ret
+
+section "fontdata", ROM0
+bdos_font: incbin "obj/gb/font_Wasted.1b"
+.end
+
+section "bdos_vblank", ROM0[$0040]
+vblank_handler:
+  push af
+  ldh a, [nmis]
+  inc a
+  ldh [nmis], a
+  pop af
+  reti
+
+; Controller reading ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+SECTION "bdos_read_pad", ROM0
+
+P1F_NONE     EQU $30
+P1F_BUTTONS  EQU $10
+P1F_DPAD     EQU $20
+DAS_DELAY    equ 15
+DAS_SPEED    equ 3
+
+
+read_pad::
+  ; Poll half the controller
+  ld a,P1F_BUTTONS
+  call .onenibble
+  ld b,a  ; B7-4 = 1; B3-0 = unpressed buttons
+
+  ; Poll the other half
+  ld a,P1F_DPAD
+  call .onenibble
+  swap a   ; A3-0 = unpressed directions; A7-4 = 1
+  xor b    ; A = pressed buttons + directions
+  ld b,a   ; B = pressed buttons + directions
+
+  ; And release the controller
+  ld a,P1F_NONE
+  ld [rP1],a
+
+  ; Combine with previous cur_keys to make new_keys
+  ldh a,[cur_keys]
+  xor b    ; A = keys that changed state
+  and b    ; A = keys that changed to pressed
+  ldh [new_keys],a
+  ld a,b
+  ldh [cur_keys],a
+  ret
+
+.onenibble:
+  ldh [rP1],a     ; switch the key matrix
+  call .knownret  ; burn 10 cycles calling a known ret
+  ldh a,[rP1]     ; ignore value while waiting for the key matrix to settle
+  ldh a,[rP1]
+  ldh a,[rP1]     ; this read counts
+  or $F0   ; A7-4 = 1; A3-0 = unpressed keys
+.knownret:
+  ret
+
+SECTION "bdos_autorepeat", ROM0
+;;
+; Adds held keys to new_keys, DAS_DELAY frames after press and
+; every DAS_SPEED frames thereafter
+; @param B which keys are eligible for autorepeat
+autorepeat::
+  ; If no eligible keys are held, skip all autorepeat processing
+  ldh a,[cur_keys]
+  and b
+  ret z
+  ld c,a  ; C: Currently held
+
+  ; If any keys were newly pressed, set the eligible keys among them
+  ; as the autorepeating set.  For example, changing from Up to
+  ; Up+Right sets Right as the new autorepeating set.
+  ldh a,[new_keys]
+  ld d,a  ; D: new_keys
+  or a
+  jr z,.no_restart_das
+  and b
+  ld [das_keys],a
+  ld a,DAS_DELAY
+  jr .have_das_timer
+.no_restart_das:
+
+  ; If time has expired, merge in the autorepeating set
+  ld a,[das_timer]
+  dec a
+  jr nz,.have_das_timer
+  ld a,[das_keys]
+  and c
+  or d
+  ldh [new_keys],a
+  ld a,DAS_SPEED
+.have_das_timer:
+  ld [das_timer],a
+  ret
+
