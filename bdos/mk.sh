@@ -10,23 +10,21 @@
 #
 set -e
 
-title=bdos
 inttitle='BDOS TEST'
-objlist='bdos main'
 onebitlist='font_Wasted'
 
 mkdir -p obj/gb
 for filename in $onebitlist; do
   rgbgfx -d 1 -o "obj/gb/$filename.1b" "tilesets/$filename.png"
 done
-for filename in $objlist; do
-  rgbasm -h -o "obj/gb/$filename.o" "src/$filename.z80"
-done
-objlisto=$(printf "obj/gb/%s.o " $objlist)
-rgblink -o "$title.gb" -p 0xFF -m "$title.map" -n "$title.sym" $objlisto
-rgbfix -jvt "$inttitle" -p 0xFF "$title.gb"
+rgbasm -h -o "obj/gb/bdos.o" "src/bdos.z80"
+rgbasm -h -o "obj/gb/$1.o" "src/$1.z80"
+rgblink -o "$1.gb" -p 0xFF -m "$1.map" -n "$1.sym" "obj/gb/bdos.o" "obj/gb/$1.o"
+rgbfix -jvt "$inttitle" -p 0xFF "$1.gb"
 
+# to build:
+# mk.sh main
 # to run:
-# bgb -watch bdos.gb &
+# wine /path/to/bgb.exe -watch main.gb &
 # to make zip:
 # zip -9 bdos.zip -@<zip.in

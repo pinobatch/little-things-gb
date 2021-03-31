@@ -7,7 +7,7 @@ main::
   rst 0
 
 hello_msg:
-  db "This program uses", 10
-  db "the CALL 5 interface", 10
+  db "This program uses\n"
+  db "the CALL 5 interface\n"
   db "to say Hello world!", 0
 
