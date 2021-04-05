@@ -10,6 +10,8 @@ terminal library to help with testing math routines and the like.
 So far, these call numbers are supported:
 
 - `c = 0`: End program (also `rst $00`)
+- `c = 1`: Wait for key input, return ASCII code in A and L.
+  Possible results from the Game Boy buttons are in `abhjkl\t\r`.
 - `c = 2`: Write ASCII character in E to the terminal.  The terminal
   is a 20 by 18 character tty supporting backspace ($08), return
   ($0D), newline ($0A), and form feed ($0C).
@@ -26,4 +28,4 @@ Intentional departures from CP/M:
 
 - Newline causes a carriage return, as in UNIX.
 - The end of string byte defaults to $00, as in C, not $24.
-
+- No local echo for get key yet.

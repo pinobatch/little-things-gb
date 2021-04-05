@@ -149,6 +149,20 @@ bdos_exit:
     jr .loop
 
 bdos_getc:
+  call bdos_wait_vblank
+  call read_pad
+  ldh a, [new_keys]
+  or a
+  jr z, bdos_getc
+  ld hl, keybindings-1
+  .kbloop:
+    inc hl
+    rra
+    jr nc, .kbloop
+  ld a, [hl]
+  ld l, a
+  ret
+
 bdos_getc_aux:
 bdos_putc_aux:
 bdos_putc_prn:
@@ -483,4 +497,8 @@ autorepeat::
 .have_das_timer:
   ld [das_timer],a
   ret
+
+SECTION "bdos_keybindings", ROM0
+keybindings:
+  db "a", "b", $09, $0D, "k", "j", "h", "l"
 

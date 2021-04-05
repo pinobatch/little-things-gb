@@ -14,8 +14,23 @@ main::
   call sqrt_test
   ld hl, 3136
   call sqrt_test
+  call pause_with_prompt
+
+  ld a, 3
+  ld de, 11669
+  ld hl, 123*256+45
+  call mul_test
 
   rst 0
+
+pause_with_prompt:
+  call puts_inline
+  db "Press a key ",0
+  ld c, 1  ; getc
+  call bdos
+  ld l, a
+  ld h, 0
+  jr print_hl_decimal_nl
 
 sqrt_test:
   push hl
@@ -30,10 +45,53 @@ sqrt_test:
   call sqrt
   ld l, d
   ld h, 0
+print_hl_decimal_nl:
   call print_hl_decimal
   ld e, "\n"
   ld c, 2
   jp bdos
+
+mul_test:
+  push hl
+
+  ; Test A*DE
+  push de
+  push af
+  ld h, d
+  ld l, e
+  call print_hl_decimal
+  call puts_inline
+  db " times ",0
+  pop af
+  push af
+  ld l, a
+  ld h, 0
+  call print_hl_decimal
+  call puts_inline
+  db "\n is ",0
+  pop af
+  pop de
+  call mul_a_de
+  call print_hl_decimal_nl
+
+  ; Test again, H*L
+  pop hl
+  push hl
+  ld l, h
+  ld h, 0
+  call print_hl_decimal
+  call puts_inline
+  db " times ",0
+  pop hl
+  push hl
+  ld h, 0
+  call print_hl_decimal
+  call puts_inline
+  db "\n is ",0
+  pop hl
+  ld e, l
+  call mul_h_e
+  jr print_hl_decimal_nl
 
 puts_inline_loop:
   ld e, a
@@ -157,5 +215,38 @@ sqrt:
     add hl, hl
     rl e
     dec b
+    jr nz, .loop
+  ret
+
+;;
+; Multiplies E by H putting result in HL; preserves ACE
+mul_h_e:
+  ld b, 8
+  ld l, 0
+  ld d, l
+  .loop:
+    add hl, hl
+    jr nc, .noadd
+      add hl, de
+    .noadd:
+    dec b
+    jr nz, .loop
+  ret
+
+;;
+; Multiplies A by DE putting result in HL; preserves BCDE
+mul_a_de:
+  ld hl, 0
+  scf
+  adc a
+  jr c, .firstwas80
+  .loop:
+    add hl, hl
+    add a
+    jr nc, .noadd
+    .firstwas80:
+      add hl, de
+    .noadd:
+    cp $80
     jr nz, .loop
   ret
