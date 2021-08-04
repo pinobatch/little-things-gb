@@ -1,0 +1,13 @@
+include "src/hardware.inc"
+
+section "HEADER", ROM0[$100]
+  nop
+  jp start
+  ds $4C
+
+start:
+  di
+  ld a, %00011011
+  ldh [rBGP], a
+.forever:
+  jr .forever

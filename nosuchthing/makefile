@@ -35,7 +35,7 @@ PNGTOCHR := ../common/tools/pngtochr$(DOTEXE)
 
 # phony targets
 
-.PHONY: run all dist zip clean
+.PHONY: ggrun run all dist zip clean
 
 ggrun: $(title).gg $(title).sym
 	"$(HOME)/develop/meka/meka/meka" $<

@@ -1,0 +1,13 @@
+Border Crossing is pick a border, load a border, hot-swap to another
+game, and play.
+
+The most common color in the center 160x144 pixels becomes color 0
+of all palettes.
+If the image is smaller than 256x224 pixels, it is padded with the
+darkest color in the image other than color 0.
+If there are 16 or fewer colors in an image, the colors are mapped
+1 to 1, except color 0 is swapped with color 0.
+If the metadata provides several 15-color palettes, it uses them.
+If there are more than 16, it attempts to pack palettes.  This takes
+a while if it needs to step through a lot of randomly chosen
+permutations.
