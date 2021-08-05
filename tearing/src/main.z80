@@ -1,13 +1,300 @@
 include "src/hardware.inc"
 
-section "HEADER", ROM0[$100]
+section "hvars", HRAM
+hVblanks: ds 1
+
+section "wvars", WRAM0, ALIGN[5]
+wStatusLine: ds SCRN_X_B
+wStatusOffset: ds 1
+
+section "vblankhandler", ROM0[$0040]
+  push af
+  ld a, [hVblanks]
+  inc a
+  ldh [hVblanks], a
+  pop af
+  reti
+
+section "HEADER", ROM0[$0100]
   nop
   jp start
-  ds $4C
+  ds $150-@, $00
 
+section "start", ROM0
 start:
   di
+  .offwait
+    ldh a, [rLY]
+    xor 144
+    jr nz, .offwait
+  ldh [rLCDC], a
+  ldh [rSCX], a
+  ldh [rSCY], a
+  ld [wStatusOffset], a
+  ldh [hVblanks], a
+  ldh [rIF], a
+  inc a  ; once LCDC comes back on, allow only vblank
+  ldh [rIE], a
   ld a, %00011011
   ldh [rBGP], a
-.forever:
-  jr .forever
+
+  ; Load still tiles
+  ld hl, stilltiles
+  ld de, $9200  ; Tile $20+
+  ld bc, stilltiles.end-stilltiles
+  call memcpy
+
+  ; Load metatiles
+  ld b, 9
+  ld hl, _SCRN0
+  ld de, mtmap
+  .rowloop
+    ld c, 10
+    .mtloop
+      ; B: rows left in mtmap; C: tiles left in row
+      push bc
+      ld a, [de]  ; A = metatile index
+      inc de
+      add a
+      add a
+      ld c, a
+      ld b, high(mtdefs)  ; BC points to metatile def
+      ld a, [bc]
+      inc c
+      ld [hl+], a  ; move to top right
+      ld a, [bc]
+      inc c
+      ld [hl-], a  ; move to bottom left
+      set 5, l
+      ld a, [bc]
+      inc c
+      ld [hl+], a  ; move to bottom right
+      ld a, [bc]
+      ld [hl+], a  ; move to next top left
+      res 5, l
+      pop bc
+      dec c
+      jr nz, .mtloop
+    ld a, l
+    add 2*SCRN_VX_B-2*10
+    ld l, a
+    adc h
+    sub l
+    ld h, a
+    dec b
+    jr nz, .rowloop
+
+  ld a, LCDCF_ON|LCDCF_BG8800|LCDCF_BG9800|LCDCF_BGON
+  ldh [rLCDC], a
+  ei
+.loop:
+  ldh a, [hVblanks]
+  and %00000111
+  call z, run_update
+  halt  ; wait for vblank
+  jr .loop
+
+section "run_update", ROM0
+
+run_update:
+  ; Frame numbers go 0, 8, 16, 24
+  ; Source address offsets go $0000, $0200, $0400, $0600
+  ld de, movingtiles
+  ldh a, [hVblanks]
+  and %00011000
+  rra
+  rra
+  add d
+  ld d, a
+  ld hl, $9000
+  ld b, $0200/4
+
+  ; Wait for TOP of frame
+  .topwait:
+    ldh a, [rLY]
+    or a
+    jr nz, .topwait
+  ld b, b
+  call hblankcopy
+
+  ; TODO: Prepare text buffer and copy it
+  ldh a, [hVblanks]
+  and $08
+  ret nz
+
+  ; Load offset
+  ld a, [wStatusOffset]
+  ld b, a
+  inc a
+  and %00011111
+  ld [wStatusOffset], a
+
+  ld a, b
+  add low(statusstr_src)
+  ld e, a
+  adc high(statusstr_src)
+  sub e
+  ld d, a
+  ld hl, wStatusLine
+  ld b, SCRN_X_B
+  .bottompreploop:
+    ld a, [de]
+    ld [hl+], a
+    inc e
+    ld a, e
+    cp low(statusstr_src.end)
+    jr nz, :+
+      ld de, statusstr_src
+    :
+    dec b
+    jr nz, .bottompreploop
+
+  .bottomwait:
+    ldh a, [rLY]
+    xor 137
+    jr nz, .bottomwait
+  ld de, wStatusLine
+  ld hl, _SCRN0 + 17*SCRN_VX_B
+  ld b, SCRN_X_B/4
+  call hblankcopy
+
+  ret
+
+  
+
+
+
+section "memcpy", ROM0
+;;
+; Copies BC bytes from HL to DE.  Compare Z80 ldir instruction.
+; @param HL source
+; @param DE destination
+; @param BC byte count
+; @return BC = 0; HL at end of source; DE at end of destination
+memcpy::
+  ; Increment B if C is nonzero
+  dec bc
+  inc b
+  inc c
+.loop:
+  ld a, [hl+]
+  ld [de],a
+  inc de
+  dec c
+  jr nz,.loop
+  dec b
+  jr nz,.loop
+  ret
+
+section "hblankcopy", ROM0
+;;
+; Performs an hblank copy that isn't a stack copy.
+; Copies 4*B bytes from DE to HL (opposite of standard memcpy)
+; at 4 bytes per line.
+hblankcopy:
+
+  ; wait for mode 2 or 3
+.unbusy:
+  ldh a, [rSTAT]
+  and $02
+  jr z, .unbusy
+.unbusy_done:
+
+  push bc
+  ; then wait for mode 0 or 1
+  ld a, [de]
+  ld c, a
+  inc e
+  ld a, [de]
+  ld b, a
+  inc e
+.busy:
+  ldh a, [rSTAT]
+  and $02
+  jr nz, .busy  ; spin wait can take up to 12 cycles
+  ld a, c      ; 1
+  ld [hl+], a  ; 2
+  ld a, b      ; 1
+  ld [hl+], a  ; 2
+  ld a, [de]   ; 2
+  ld [hl+], a  ; 2
+  inc e        ; 1
+  ld a, [de]   ; 2
+  ld [hl+], a  ; 2
+  inc de
+  pop bc
+  dec b
+  jr nz, hblankcopy
+  ret
+
+section "Tiles", ROM0, ALIGN[4]
+movingtiles: incbin "obj/gb/movingtiles16x16.2b"
+stilltiles:  incbin "obj/gb/stilltiles16x16.2b"
+.end
+
+section "mtdefs", ROM0, ALIGN[8]
+mtdefs:
+  db $22,$22,$22,$22  ; sky
+  db $22,$14,$22,$16  ; cloud left
+  db $00,$01,$02,$03  ; cloud middle
+  db $15,$22,$17,$22  ; cloud right
+  db $04,$05,$06,$07  ; ring
+  db $2C,$2C,$22,$22  ; cloud bottom
+  db $0C,$0D,$0E,$0F  ; spinning K block
+  db $10,$11,$12,$13  ; fally lift block
+
+  db $18,$22,$1A,$22  ; flower 1
+  db $22,$19,$22,$1A  ; flower 2
+  db $20,$1D,$2B,$25  ; solid platform top left
+  db $1C,$1D,$24,$25  ; solid platform top
+  db $1C,$21,$24,$2A  ; solid platform top right
+  db $22,$22,$1E,$1E  ; water surface
+  db $29,$27,$2B,$26  ; solid platform left
+  db $26,$27,$27,$26  ; solid platform center
+
+  db $26,$28,$27,$2A  ; solid platform right
+  db $23,$23,$23,$23  ; water center
+  db $22,$30,$22,$32  ; left side pole top
+  db $31,$08,$33,$0A  ; banner left
+  db $09,$08,$0B,$0A  ; banner center
+  db $09,$34,$0B,$36  ; banner right
+  db $35,$22,$37,$22  ; right side pole top
+  db $22,$32,$22,$32  ; left side pole center
+
+  db $37,$22,$37,$22  ; right side pole center
+  db $37,$14,$37,$16  ; right side pole bottom + cloud left
+
+section "mtmap", ROM0
+mtmap:
+  db  0, 0, 0, 0, 0, 0, 1, 2, 3, 0  ; cloud in the sky
+  db  0, 0, 4, 4, 4, 0, 0, 5, 0, 4  ; rings and cloud bottom
+  db  0, 0, 0, 0,18,19,20,21,22, 0  ; banner
+  db  0, 0, 6, 6,23, 0, 0, 0,24, 6  ; K blocks
+  db  0, 0, 0, 0,23, 0, 7, 0,24, 0  ; fally lift block
+  db  0, 0, 0, 0,23, 0, 0, 0,25, 3  ; cloudbush
+  db  0, 8, 8, 9,23, 0, 0, 0,10,11  ; flowers and right platform
+  db 11,11,11,11,12,13,13,13,14,15  ; left platform and water surface
+  db 15,15,15,15,16,17,17,17,14,15  ; solid dirt and water
+
+section "statustxt", ROM0
+newcharmap encStatusBar
+  charmap " ",$40
+  charmap "A",$41
+  charmap "B",$42
+  charmap "E",$43
+  charmap "G",$44
+  charmap "I",$45
+  charmap "L",$46
+  charmap "M",$47
+  charmap "N",$48
+  charmap "O",$49
+  charmap "P",$4A
+  charmap "R",$4B
+  charmap "S",$4C
+  charmap "T",$4D
+  charmap ":",$4E
+  charmap "?",$4F
+
+statusstr_src:
+  db "TEARING: IS IT A PROBLEM?       "
+.end

@@ -81,8 +81,8 @@ $(objdir)/%.o: $(srcdir)/%.z80 $(srcdir)/hardware.inc
 objlisto := \
   $(foreach o,$(objlist),$(objdir)/$(o).o)
 rom_and_dbg: $(objlisto)
-	rgblink -dt -o $(title).gb -n $(title).sym  $^
-	rgbfix -jv -t "TEARING DEMO" -k "P8" $(title).gb
+	rgblink -dt -o $(title).gb -n $(title).sym -p0xFF $^
+	rgbfix -jv -t "TEARING DEMO" -k "P8" -p0xFF $(title).gb
 
 $(title).sym $(title).gb: rom_and_dbg
 	touch $@
