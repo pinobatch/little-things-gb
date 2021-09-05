@@ -2,7 +2,7 @@
 
 PB8 compressor and decompressor
 
-Copyright 2019 Damian Yerrick
+Copyright 2019, 2021 Damian Yerrick
 
 This software is provided 'as-is', without any express or implied
 warranty.  In no event will the authors be held liable for any damages
@@ -19,6 +19,13 @@ freely, subject to the following restrictions:
 2. Altered source versions must be plainly marked as such, and must not be
    misrepresented as being the original software.
 3. This notice may not be removed or altered from any source distribution.
+
+*/
+
+/* Version history
+
+2021-09: make match distance vary; allow zero-filled history
+2019: initial release for SameBoy
 
 */
 
@@ -88,34 +95,56 @@ LoadTileset:
 
 */
 
+#define PB8_BACKREF_MAX 256
+
 /* Compressor and decompressor *************************************/
 
 /**
  * Compresses an input stream to PB8 data on an output stream.
  * @param infp input stream
  * @param outfp output stream
- * @param blocklength size of an independent input block in bytes
+ * @param blocklength size of an independent input block in bytes,
+ * resetting history after each
+ * @param matchdist how far back to look in the string for the
+ * match byte
+ * @param zerohistory if false, assume history doesn't exist;
+ * if true, preload zeroes at start of each block
  * @return 0 for reaching infp end of file, or EOF for error
  */
-int pb8(FILE *infp, FILE *outfp, size_t blocklength) {
+int pb8(FILE *infp, FILE *outfp, size_t blocklength, size_t matchdist,
+  bool zerohistory) {
   blocklength >>= 3;  // convert bytes to blocks
   assert(blocklength > 0);
   while (1) {
-    int last_byte = EOF;  // value that never occurs in a file
+    // Each block resets history
+    unsigned char history[PB8_BACKREF_MAX] = {0};
+    signed int historysrc = -matchdist;
+    size_t historydst = 0;
+
+    if (zerohistory) {
+      historydst = matchdist;
+      historysrc = 0;
+    }
+
     for (size_t blkleft = blocklength; blkleft > 0; --blkleft) {
-      unsigned int control_byte = 0x0001;
+      // Do one packet
       unsigned char literals[8];
       size_t nliterals = 0;
+      unsigned int control_byte = 0x0001;
+
       while (control_byte < 0x100) {
         int c = fgetc(infp);
         if (c == EOF) break;
 
         control_byte <<= 1;
-        if (c == last_byte) {
+        if (historysrc >= 0 && c == history[historysrc]) {
           control_byte |= 0x01;
         } else {
-          literals[nliterals++] = last_byte = c;
+          literals[nliterals++] = c;
         }
+        history[historydst] = c;
+        if (++historysrc >= PB8_BACKREF_MAX) historysrc = 0;
+        if (++historydst >= PB8_BACKREF_MAX) historydst = 0;
       }
       if (control_byte > 1) {
         // Fill partial block with repeats
@@ -143,8 +172,9 @@ int pb8(FILE *infp, FILE *outfp, size_t blocklength) {
  * @param outfp output stream
  * @return 0 for reaching infp end of file, or EOF for error
  */
-int unpb8(FILE *infp, FILE *outfp) {
-  int last_byte = 0;
+int unpb8(FILE *infp, FILE *outfp, size_t matchdist) {
+  unsigned char history[PB8_BACKREF_MAX] = {0};
+  size_t historysrc = 0, historydst = matchdist;
   while (1) {
     int control_byte = fgetc(infp);
     if (control_byte == EOF) {
@@ -152,12 +182,19 @@ int unpb8(FILE *infp, FILE *outfp) {
     }
     control_byte &= 0xFF;
     for (size_t bytesleft = 8; bytesleft > 0; --bytesleft) {
-      if (!(control_byte & 0x80)) {
-        last_byte = fgetc(infp);
-        if (last_byte == EOF) return EOF;  // read error
+      int c;
+      if (control_byte & 0x80) {
+        c = history[historysrc];  // Repeat
+      } else {
+        c = fgetc(infp);  // Literal
+        if (c == EOF) return EOF;  // read error
       }
+
+      history[historydst] = c;
+      if (++historysrc >= PB8_BACKREF_MAX) historysrc = 0;
+      if (++historydst >= PB8_BACKREF_MAX) historydst = 0;
       control_byte <<= 1;
-      int ok = fputc(last_byte, outfp);
+      int ok = fputc(c, outfp);
       if (ok == EOF) return EOF;
     }
   }
@@ -174,13 +211,17 @@ static inline void set_fd_binary(unsigned int fd) {
 }
 
 static const char *usage_msg =
-"usage: pb8 [-d] [-l blocklength] [infile [outfile]]\n"
+"usage: pb8 [-d] [-z] [-m dist] [-l blocklength] [infile [outfile]]\n"
 "Compresses a file using RLE with unary run and literal lengths.\n"
 "\n"
 "options:\n"
 "  -d                decompress\n"
 "  -l blocklength    allow RLE packets to span up to blocklength\n"
 "                      input bytes (multiple of 8; default 8)\n"
+"  -z                zero-flil each block's history when compressing\n"
+"                      (default: generate no references preceding\n"
+"                      start of each block)\n"
+"  -m dist           match distance (default 1; max 256)\n"
 "  -h, -?, --help    show this usage page\n"
 "  --version         show copyright info\n"
 "\n"
@@ -189,8 +230,8 @@ static const char *usage_msg =
 "You cannot compress to or decompress from a terminal.\n"
 ;
 static const char *version_msg =
-"PB8 compressor (C version) v0.01\n"
-"Copyright 2019 Damian Yerrick <https://pineight.com/contact/>\n"
+"PB8 compressor (C version) v0.02\n"
+"Copyright 2019, 2021 Damian Yerrick <https://pineight.com/contact/>\n"
 "This software is provided 'as-is', without any express or implied\n"
 "warranty.\n"
 ;
@@ -200,8 +241,8 @@ static const char *toomanyfilenames_msg =
 int main(int argc, char **argv) {
   const char *infilename = NULL;
   const char *outfilename = NULL;
-  bool decompress = false;
-  size_t blocklength = 8;
+  bool decompress = false, zerohistory = false;
+  size_t blocklength = 8, match_distance = 1;
 
   for (int i = 1; i < argc; ++i) {
     if (argv[i][0] == '-' && argv[i][1] != 0) {
@@ -226,6 +267,10 @@ int main(int argc, char **argv) {
           decompress = true;
           break;
 
+        case 'z':
+          zerohistory = true;
+          break;
+
         case 'l': {
           const char *argvalue = argv[i][2] ? argv[i] + 2 : argv[++i];
           const char *endptr = NULL;
@@ -244,6 +289,19 @@ int main(int argc, char **argv) {
           blocklength = tvalue;
         } break;
 
+        case 'm': {
+          const char *argvalue = argv[i][2] ? argv[i] + 2 : argv[++i];
+          const char *endptr = NULL;
+
+          unsigned long tvalue = strtoul(argvalue, (char **)&endptr, 10);
+          if (endptr == argvalue || tvalue > PB8_BACKREF_MAX) {
+            fprintf(stderr, "pb8: match distance %s not a positive integer 0-256\n",
+                    argvalue);
+            return EXIT_FAILURE;
+          }
+          match_distance = tvalue;
+        } break;
+
         default:
           fprintf(stderr, "pb8: unknown option -%c\n", argtype);
           return EXIT_FAILURE;
@@ -257,6 +315,12 @@ int main(int argc, char **argv) {
       return EXIT_FAILURE;
     }
   }
+  if (match_distance >= blocklength) {
+    fprintf(stderr, "pb8: match distance %zu not less than block length %zd\n",
+            match_distance, blocklength);
+    return EXIT_FAILURE;
+  }
+
   if (infilename && !strcmp(infilename, "-")) {
     infilename = NULL;
   }
@@ -304,9 +368,9 @@ int main(int argc, char **argv) {
   int compfailed = 0;
   int has_ferror = 0;
   if (decompress) {
-    compfailed = unpb8(infp, outfp);
+    compfailed = unpb8(infp, outfp, match_distance);
   } else {
-    compfailed = pb8(infp, outfp, blocklength);
+    compfailed = pb8(infp, outfp, blocklength, match_distance, zerohistory);
   }
   fflush(outfp);
   if (ferror(infp)) {
