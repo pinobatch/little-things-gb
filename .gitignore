@@ -16,6 +16,7 @@
 *.4b
 *.nam
 */obj/gg/*.pal
+*/obj/gb/*.pal
 */obj/gb/*.z80
 __pycache__
 zip.in
@@ -25,6 +26,8 @@ ca83/tools/pb8
 /tellinglys/tellinglys-*.zip
 /firstwhite/firstwhite-*.zip
 /nosuchthing/nosuchthing-*.zip
+/sgbears/sgbears-*.zip
 /common/tools/pngtochr
 /common/tools/pngtochr.exe
-
+/common/tools/pb8
+/common/tools/pb8.exe

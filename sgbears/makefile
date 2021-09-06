@@ -19,20 +19,21 @@ default: $(title).gb
 
 CC:=gcc
 CFLAGS:=-Wall -Wextra -Os
-
-PNGTOCHR:=tools/pngtochr$(DOTEXE)
-PB8:=tools/pb8$(DOTEXE)
+TOOLSDIR:=../common/tools
+PNGTOCHR:=$(TOOLSDIR)/pngtochr$(DOTEXE)
+PB8:=$(TOOLSDIR)/pb8$(DOTEXE)
+.SECONDARY: $(PNGTOCHR) $(PB8)
 
 # Unity build the converter
 $(PNGTOCHR): \
-  tools/indexedimage.c tools/lodepng.c tools/musl_getopt.c \
-  tools/pngto.c
+  $(TOOLSDIR)/indexedimage.c $(TOOLSDIR)/lodepng.c \
+  $(TOOLSDIR)/musl_getopt.c $(TOOLSDIR)/pngto.c
 	$(CC) $(CFLAGS) -o $@ $^
 
 $(PNGTOCHR): \
-  tools/indexedimage.c tools/lodepng.c tools/musl_getopt.c
+  $(TOOLSDIR)/indexedimage.h $(TOOLSDIR)/lodepng.h $(TOOLSDIR)/musl_getopt.h
 
-$(PB8): tools/pb8.c
+$(PB8): $(TOOLSDIR)/pb8.c
 	$(CC) $(CFLAGS) -o $@ $^
 
 # Game Boy program part #############################################
@@ -104,6 +105,7 @@ dist: $(title)-$(version).zip
 zip: $(title)-$(version).zip
 
 clean:
-	-rm $(PNGTOCHR) $(PB8)
+	# Don't remove tools in common folder
+	-rm tools/pngtochr$(DOTEXE) tools/pb8$(DOTEXE)
 	-rm obj/gb/*.pal obj/gb/*.1b obj/gb/*.2b obj/gb/*.4b obj/gb/*.nam
 	-rm obj/gb/*.o obj/gb/*.pb16 obj/gb/*.pb8

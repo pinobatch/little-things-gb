@@ -48,13 +48,15 @@ clean:
 $(objdir)/main.o: $(objdir)/gsmplay8x15-16.chr1.pb8
 
 # Building native tools
-.SECONDARY: tools/pb8$(DOTEXE)
+TOOLSDIR:=../common/tools
+PB8:=$(TOOLSDIR)/pb8$(DOTEXE)
+.SECONDARY: $(PB8)
 
-tools/%$(DOTEXE): tools/%.c
+$(PB8): $(TOOLSDIR)/pb8.c
 	$(CC) -static $(CFLAGS) -o $@ $^
 
 # Converting graphics
-$(objdir)/%.pb8: tools/pb8$(DOTEXE) $(objdir)/%
+$(objdir)/%.pb8: $(PB8) $(objdir)/%
 	$^ $@
 
 $(objdir)/%-16.chr1: tools/pilbmp2nes.py $(imgdir)/%.png
