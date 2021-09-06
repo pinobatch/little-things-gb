@@ -1,0 +1,415 @@
+include "src/hardware.inc"
+include "src/global.inc"
+
+; Fadeout takes about one second.
+FADEOUT_TIME equ 14
+
+section "hLocals", HRAM[hLocals]
+  ds 16
+
+section "hState", HRAM
+hBearsSrc:     ds 2
+hJudgmentsSrc: ds 2
+hCapability::  ds 1
+
+section "scratchbuffers", WRAM0
+help_line_buffer:: ds 32
+
+STACK_SIZE EQU 64
+section "stack", WRAM0, ALIGN[2]
+stack_top: ds STACK_SIZE
+
+section "header", ROM0[$0100]
+  nop
+  jp past_header
+  ds 76, $00
+past_header:
+  di
+  ld sp, stack_top + STACK_SIZE  ; Set up stack pointer (full descending)
+
+  ; Detect GBC
+  xor $11
+  cp 1  ; CF = 1 for GBC
+  ld a, 0  ; preserve carry
+  rra
+  ldh [hCapability], a
+
+  ; Vblank is the only interrupt we use
+  xor a
+  ldh [cur_keys], a
+  ldh [hVblanks], a
+  ldh [rIF], a
+  inc a  ; ld a, IEF_VBLANK
+  ldh [rIE], a
+  ld a,P1F_GET_NONE
+  ldh [rP1],a
+
+  ; Copy the sprite DMA routine to HRAM
+  ld hl,hramcode_start
+  ld de,run_dma
+  call memcpy_pascal16
+
+  call load_guest_pic
+
+  ; Load the error message in case this isn't a Super Game Boy
+  ld de, playmate_chr
+  ld hl, _VRAM8000
+  ld b, playmate_chr.end - playmate_chr
+  .spritevramexpandloop:
+    ld a, [de]
+    inc de
+    ld [hl+], a
+    ld a, $FF
+    ld [hl+], a
+    dec b
+    jr nz, .spritevramexpandloop
+
+  ld a, %00011011
+  ldh [rBGP], a
+  ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8800|LCDCF_BG9800|LCDCF_WINOFF
+  ldh [rLCDC], a
+
+  ldh a, [hCapability]
+  add a
+  jr c, .is_gbc
+    ; If not GBC, detect SGB.
+    ; First wait a bit longer for SGB to warm up
+    call sgb_wait
+    call sgb_wait
+    call sgb_wait
+    call sgb_wait
+    call detect_sgb
+    ldh a, [hCapability]
+    rra
+    jr c, .is_sgb
+  .is_gbc:
+    ; On DMG/MGB and color systems, show a notice that this
+    ; test works only on Super Game Boy
+
+    ld hl, SOAM
+    .mono_oamloop:
+      ld a, l
+      and 4
+      add a
+      add a
+      add 144+16-32
+      ld [hl+], a
+      ld a, l
+      and $F8
+      add 160+8-48
+      ld [hl+], a
+      ld a, l
+      rra
+      ld [hl+], a
+      xor a
+      ld [hl+], a
+      ld a, l
+      cp 12*4
+      jr c, .mono_oamloop
+    ld a, l
+    ld [oam_used], a
+    call lcd_clear_oam
+    ei
+    call wait_vblank_run_dma
+    ld a, %11000000
+    ldh [rOBP0], a
+    ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8800|LCDCF_BG9800|LCDCF_WINOFF|LCDCF_OBJON|LCDCF_OBJ16
+    ldh [rLCDC], a
+    .mono_forever:
+      halt
+      jr .mono_forever
+
+  .is_sgb:
+  ld hl, sgb_cmd_clear_attrs
+  call sgb_send
+  ld hl, sgb_cmd_set_palette
+  call sgb_send
+  call sgb_freeze
+  
+  ; Now we're set up. Send Papa, tilemap, Cubby, Mama
+  ld a, low(Bears_pb16)
+  ldh [hBearsSrc+0], a
+  ld a, high(Bears_pb16)
+  ldh [hBearsSrc+1], a
+  ld a, low(judgments_pb16)
+  ldh [hJudgmentsSrc+0], a
+  ld a, high(judgments_pb16)
+  ldh [hJudgmentsSrc+1], a
+
+  call sgb_send_one_bear
+  call sgb_send_bear_tilemap
+  rept FADEOUT_TIME
+    call sgb_wait
+  endr
+  call sgb_send_one_bear
+  call sgb_send_one_bear
+
+  call load_guest_pic
+  ld a, %00011011
+  ldh [rBGP], a
+  ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8800|LCDCF_BG9800|LCDCF_WINOFF
+  ldh [rLCDC], a
+  call sgb_unfreeze
+
+  .forever
+    jr .forever
+
+load_guest_pic:
+  call lcd_off
+  ; Load Goldilocks sitting in Cubby's chair  
+  ld de, Goldi_hmmm_pb16
+  ld hl, _VRAM9000
+  ld b, 128
+  call pb16_unpack_block
+  ld h, high(_VRAM8800)
+  ld b, 128
+  call pb16_unpack_block
+  ld hl, Goldi_hmmm_nam
+  ld de, _SCRN0
+  jp load_full_nam
+
+BEAR_W = 5
+BEAR_H = 16
+JUDGMENT_W = 4
+JUDGMENT_H = 4
+JUDGMENT_START_TILE_ID = 80
+GAME_CUTOUT_TILE_ID = 96
+
+sgb_send_one_bear:
+  call lcd_off
+  ld hl, _VRAM8000
+
+  ; Load one bear's tiles
+  ldh a, [hBearsSrc+0]
+  ld e, a
+  ldh a, [hBearsSrc+1]
+  ld d, a
+  ld b, BEAR_W*BEAR_H*2
+  call pb16_unpack_block
+  ld a, e
+  ldh [hBearsSrc+0], a
+  ld a, d
+  ldh [hBearsSrc+1], a
+
+  ; Load one judgment's tiles
+  ldh a, [hJudgmentsSrc+0]
+  ld e, a
+  ldh a, [hJudgmentsSrc+1]
+  ld d, a
+  ld b, JUDGMENT_W*JUDGMENT_H
+  call pb16_unpack_block
+  ld a, e
+  ldh [hJudgmentsSrc+0], a
+  ld a, d
+  ldh [hJudgmentsSrc+1], a
+
+  ; Tiles at even X point to CHR RAM address of planes 0 and 1 of
+  ; a tile.  Tiles at odd X point to planes 2 and 3.
+  ; 0-79: the bear
+  ld hl, _SCRN0+640
+  push hl
+  xor a
+  ld c, BEAR_W*BEAR_H*2
+  ld hl, _SCRN0+640
+  call memset_inc
+
+  ; 80-95: the judgment
+  ld bc, 16 * 256 + JUDGMENT_START_TILE_ID * 2
+  .judgloop
+    ld a, c
+    inc c
+    ld [hl+], a
+    ld a, 1  ; share same first plane as tile 0
+    ld [hl+], a
+    dec b
+    jr nz, .judgloop
+  ld [hl+], a  ; 96: a blank tile for the game area cutout
+  ld [hl+], a
+
+  pop hl
+  ld de, _SCRN0
+  call load_full_nam
+
+  ld a, $E4
+  ldh [rBGP], a
+  ld a, $13*8+1  ; CHR_TRN
+  ld b, $00  ; uses only first half of obj
+  jp sgb_send_trn_ab
+
+sgb_send_bear_tilemap:
+  call sgb_load_trn_tilemap
+
+  ; The SGB border tilemap is 64 bytes per line, alternating tile ID
+  ; and VH01PP00 bytes where V and H are flip and P is subpalette
+  ld hl, _VRAM8000
+  ld bc, 65536-896*2
+  xor a
+  .clearloop:
+    ld [hl+], a
+    xor %00010000
+    inc c
+    jr nz, .clearloop
+    inc b
+    jr nz, .clearloop
+
+  ; Draw cutout.  Begins 5 rows from the top and 6 from the left
+  ld hl, _VRAM8000 + 64 * 5 + 2 * 6
+  ld a, GAME_CUTOUT_TILE_ID
+  ld b, 18
+  ld de, (32-20) * 2
+  .cutout_rowloop:
+    ld c, 20
+    .cutout_tileloop:
+      ld [hl+], a
+      inc l
+      dec c
+      jr nz, .cutout_tileloop
+    add hl, de
+    dec b
+    jr nz, .cutout_rowloop
+
+  ; Load bear and judgment tilemaps
+  ld hl, _VRAM8000 + 64 * 6 + 2 * 1
+  ld bc, 16*256+5
+  xor a
+  call sgb_set_tilemap_rect
+  ld hl, _VRAM8000 + 64 * 12 + 2 * 26
+  ld bc, 4*256+4
+  call sgb_set_tilemap_rect
+
+  ; Load palette
+  ld de, _VRAM8800
+  ld hl, Bears_pal
+  ld bc, 32
+  call memcpy
+
+  ld a, $14*8+1  ; PCT_TRN
+  ld b, $00
+  jp sgb_send_trn_ab
+
+sgb_set_tilemap_rect:
+  push bc
+  push hl
+  .tileloop:
+    ld [hl+], a
+    inc a
+    inc l
+    dec c
+    jr nz, .tileloop
+  pop hl
+  pop bc
+  ld de, 64
+  add hl, de
+  dec b
+  jr nz, sgb_set_tilemap_rect
+  ret
+
+
+
+section "memset_tiny",ROM0[$08]
+;;
+; Writes C bytes of value A starting at HL.
+memset_tiny::
+  ld [hl+],a
+  dec c
+  jr nz,memset_tiny
+  ret
+
+section "memset_inc",ROM0
+;;
+; Writes C bytes of value A, A+1, ..., A+C-1 starting at HL.
+memset_inc::
+  ld [hl+],a
+  inc a
+  dec c
+  jr nz,memset_inc
+  ret
+
+section "memcpy", ROM0
+clear_scrn0_to_0::
+  ld h, 0
+clear_scrn0_to_h::
+  ld de,_SCRN0
+  ld bc,32*32
+  ; fall through to memset
+
+;;
+; Writes BC bytes of value H starting at DE.
+memset::
+  ; Increment B if C is nonzero
+  dec bc
+  inc b
+  inc c
+  ld a, h
+.loop:
+  ld [de],a
+  inc de
+  dec c
+  jr nz,.loop
+  dec b
+  jr nz,.loop
+  ret
+
+;;
+; Copy a string preceded by a 2-byte length from HL to DE.
+; @param HL source address
+; @param DE destination address
+memcpy_pascal16::
+  ld a, [hl+]
+  ld c, a
+  ld a, [hl+]
+  ld b, a
+  ; fall through to memcpy
+
+;;
+; Copies BC bytes from HL to DE.
+; @return A: last byte copied; HL at end of source;
+; DE at end of destination; B=C=0
+memcpy::
+  ; Increment B if C is nonzero
+  dec bc
+  inc b
+  inc c
+.loop:
+  ld a, [hl+]
+  ld [de],a
+  inc de
+  dec c
+  jr nz,.loop
+  dec b
+  jr nz,.loop
+  ret
+
+;;
+; The routine gets copied to high RAM.  While OAM DMA is running,
+; both ROM and WRAM are inaccessible; only HRAM is readable.
+; But unlike on the NES, the CPU continues to fetch and execute
+; instructions.  So a program needs to run 160 mcycles' worth of
+; code from HRAM until this finishes.  Thus to present a display
+; list, the program will call run_dma, not hramcode_start.
+hramcode_start:
+  dw hramcode_end-hramcode_start-2
+  ld a,SOAM >> 8
+  ldh [rDMA],a
+  ld a,40
+.loop:
+  dec a
+  jr nz,.loop
+  ret
+hramcode_end:
+
+
+section "gfx", ROM0
+Bears_pb16:
+  incbin "obj/gb/Bears_128.4b.pb16"
+Bears_pal:
+  incbin "obj/gb/Bears_128.pal"
+judgments_pb16:
+  incbin "obj/gb/judgments.2b.pb16"
+playmate_chr:
+  incbin "obj/gb/sgb-playmate.h.1b"
+  .end
+Goldi_hmmm_pb16:
+  incbin "obj/gb/Goldi_hmmm.u.2b.pb16"
+Goldi_hmmm_nam:
+  incbin "obj/gb/Goldi_hmmm.nam"
