@@ -88,3 +88,40 @@ read_pad::
   or $F0   ; A7-4 = 1; A3-0 = unpressed keys
 .knownret:
   ret
+
+;;
+; Adds held keys to new_keys, DAS_DELAY frames after press and
+; every DAS_SPEED frames thereafter
+; @param B which keys are eligible for autorepeat
+autorepeat::
+  ; If no eligible keys are held, skip all autorepeat processing
+  ldh a,[cur_keys]
+  and b
+  ret z
+  ld c,a  ; C: Currently held
+
+  ; If any keys were newly pressed, set the eligible keys among them
+  ; as the autorepeating set.  For example, changing from Up to
+  ; Up+Right sets Right as the new autorepeating set.
+  ldh a,[new_keys]
+  ld d,a  ; D: new_keys
+  or a
+  jr z,.no_restart_das
+  and b
+  ld [das_keys],a
+  ld a,DAS_DELAY
+  jr .have_das_timer
+.no_restart_das:
+
+  ; If time has expired, merge in the autorepeating set
+  ld a,[das_timer]
+  dec a
+  jr nz,.have_das_timer
+  ld a,[das_keys]
+  and c
+  or d
+  ldh [new_keys],a
+  ld a,DAS_SPEED
+.have_das_timer:
+  ld [das_timer],a
+  ret

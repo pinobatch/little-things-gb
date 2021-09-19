@@ -11,6 +11,7 @@ section "hState", HRAM
 hBearsSrc:     ds 2
 hJudgmentsSrc: ds 2
 hCapability::  ds 1
+hDelayAmount:: ds 1
 
 section "scratchbuffers", WRAM0
 help_line_buffer:: ds 32
@@ -52,16 +53,18 @@ past_header:
   call load_guest_pic
 
   ; Load the error message in case this isn't a Super Game Boy
-  ld de, playmate_chr
+  ld de, menutiles_chr
   ld hl, _VRAM8000
-  ld b, playmate_chr.end - playmate_chr
+  ld bc, 65536 - (playmate_chr.end - menutiles_chr)
   .spritevramexpandloop:
     ld a, [de]
     inc de
     ld [hl+], a
     ld a, $FF
     ld [hl+], a
-    dec b
+    inc c
+    jr nz, .spritevramexpandloop
+    inc b
     jr nz, .spritevramexpandloop
 
   ld a, %00011011
@@ -85,35 +88,24 @@ past_header:
   .is_gbc:
     ; On DMG/MGB and color systems, show a notice that this
     ; test works only on Super Game Boy
-
-    ld hl, SOAM
-    .mono_oamloop:
-      ld a, l
-      and 4
-      add a
-      add a
-      add 144+16-32
-      ld [hl+], a
-      ld a, l
-      and $F8
-      add 160+8-48
-      ld [hl+], a
-      ld a, l
-      rra
-      ld [hl+], a
-      xor a
-      ld [hl+], a
-      ld a, l
-      cp 12*4
-      jr c, .mono_oamloop
-    ld a, l
+    
+    xor a
     ld [oam_used], a
+    ld hl, help_line_buffer
+    ld a, (playmate_chr - menutiles_chr) / 8
+    ld c, 24
+    call memset_inc
+    ld hl, help_line_buffer
+    ld de, (160+8-48)*256 + (144+16-32)
+    ld bc, 6*256 + 4
+    call oam_put_rect
     call lcd_clear_oam
+
     ei
     call wait_vblank_run_dma
     ld a, %11000000
     ldh [rOBP0], a
-    ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8800|LCDCF_BG9800|LCDCF_WINOFF|LCDCF_OBJON|LCDCF_OBJ16
+    ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8800|LCDCF_BG9800|LCDCF_WINOFF|LCDCF_OBJON
     ldh [rLCDC], a
     .mono_forever:
       halt
@@ -124,9 +116,62 @@ past_header:
   call sgb_send
   ld hl, sgb_cmd_set_palette
   call sgb_send
-  call sgb_freeze
+  ld a, 60
+  ldh [hDelayAmount], a
+
+  .editloop:
+    call read_pad
+    ld b, PADF_LEFT|PADF_RIGHT
+    call autorepeat
+    ldh a, [new_keys]
+    ld b, a
+    ldh a, [hDelayAmount]
+    bit PADB_RIGHT, b
+    jr z, .notRight
+      inc a
+    .notRight:
+    bit PADB_LEFT, b
+    jr z, .notLeft
+      dec a
+    .notLeft:
+    cp 100
+    jr nc, .out_of_range
+      ldh [hDelayAmount], a
+    .out_of_range:
+  
+    ; Load menu layout.  Active digits are help_line_buffer[5] and [6]
+    ld hl, delay_layout
+    ld de, help_line_buffer
+    call memcpy_pascal16
+    ldh a, [hDelayAmount]
+    call bcd8bit_ac
+    or a
+    jr nz, .tens_nonzero
+      ld a, $0A
+    .tens_nonzero:
+    ld hl, help_line_buffer + 5
+    ld [hl+], a
+    ld [hl], c
+    xor a
+    ld [oam_used], a
+    ld hl, help_line_buffer
+    ld de, (160+8-64)*256 + (144+16-16)
+    ld bc, 8*256 + 2
+    call oam_put_rect
+    call lcd_clear_oam
+    ei
+    call wait_vblank_run_dma
+    ld a, %11000000
+    ldh [rOBP0], a
+    ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8800|LCDCF_BG9800|LCDCF_WINOFF|LCDCF_OBJON
+    ldh [rLCDC], a
+    di
+    ld a, [new_keys]
+    and PADF_A|PADF_START
+    jr z, .editloop
   
   ; Now we're set up. Send Papa, tilemap, Cubby, Mama
+  call sgb_freeze
   ld a, low(Bears_pb16)
   ldh [hBearsSrc+0], a
   ld a, high(Bears_pb16)
@@ -138,9 +183,20 @@ past_header:
 
   call sgb_send_one_bear
   call sgb_send_bear_tilemap
-  rept FADEOUT_TIME
-    call sgb_wait
-  endr
+  ; At this point we're out of sgb_send_trn_ab, and LCD is off
+  ld a, [hDelayAmount]
+  or a
+  jr z, .no_wait
+    ld b, a
+    ld a, LCDCF_ON|LCDCF_BGON
+    ldh [rLCDC], a
+    ei
+    .delayAmount_loop:
+      call wait_vblank_irq
+      dec b
+      jr nz, .delayAmount_loop
+    di
+  .no_wait:
   call sgb_send_one_bear
   call sgb_send_one_bear
 
@@ -152,6 +208,7 @@ past_header:
   call sgb_unfreeze
 
   .forever
+    halt
     jr .forever
 
 load_guest_pic:
@@ -304,7 +361,44 @@ sgb_set_tilemap_rect:
   jr nz, sgb_set_tilemap_rect
   ret
 
-
+;;
+; Copies a B column by C row tilemap from HL to OAM starting at (D, E)
+; Bit 7 of each entry set for horizontal flipping
+oam_put_rect:
+  push bc
+  push de
+  .tileloop:
+    ld a, [hl+]
+    push hl
+    ld c, a
+    ld hl, oam_used
+    ld l, [hl]
+    ld a, e  ; Write Y
+    ld [hl+], a
+    ld a, d  ; Write X
+    ld [hl+], a
+    add 8
+    ld d, a
+    ld a, c  ; Write tile number
+    and $7F
+    ld [hl+], a
+    xor c  ; Write horizontal flip
+    rrca
+    rrca
+    ld [hl+], a
+    ld a, l
+    ld [oam_used], a
+    pop hl
+    dec b
+    jr nz, .tileloop
+  pop de
+  pop bc
+  ld a, e  ; Move E to next row
+  add 8
+  ld e, a
+  dec c
+  jr nz, oam_put_rect
+  ret
 
 section "memset_tiny",ROM0[$08]
 ;;
@@ -406,10 +500,17 @@ Bears_pal:
   incbin "obj/gb/Bears_128.pal"
 judgments_pb16:
   incbin "obj/gb/judgments.2b.pb16"
+menutiles_chr:
+  incbin "obj/gb/menutiles.1b"
 playmate_chr:
-  incbin "obj/gb/sgb-playmate.h.1b"
+  incbin "obj/gb/sgb-playmate.1b"
   .end
 Goldi_hmmm_pb16:
   incbin "obj/gb/Goldi_hmmm.u.2b.pb16"
 Goldi_hmmm_nam:
   incbin "obj/gb/Goldi_hmmm.nam"
+
+delay_layout:
+  dw 16  ; memcpy length
+  db $0C,$0D,$0E,$0F,$8B,$06,$00,$0B  ; Delay: < 60 >
+  db $0A,$0A,$0A,$0A,$10,$11,$12,$13  ;       A: Call

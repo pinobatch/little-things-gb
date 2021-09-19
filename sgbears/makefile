@@ -1,7 +1,7 @@
 
 title := sgbears
 version := wip
-objlist := main ppuclear unpb16 pads sgb
+objlist := main ppuclear unpb16 pads sgb bcd
 
 ifdef COMSPEC
 # Assume Windows
@@ -44,7 +44,8 @@ obj/gb/%.o: src/%.z80 src/hardware.inc
 obj/gb/main.o: \
   obj/gb/Bears_128.4b.pb16 obj/gb/Bears_128.pal \
   obj/gb/Goldi_hmmm.u.2b.pb16 obj/gb/Goldi_hmmm.nam \
-  obj/gb/judgments.2b.pb16 obj/gb/sgb-playmate.h.1b
+  obj/gb/judgments.2b.pb16 \
+  obj/gb/sgb-playmate.1b obj/gb/menutiles.1b
 
 $(title).gb: $(foreach o,$(objlist),obj/gb/$(o).o)
 	rgblink -dto $@ -m $(title).map -n $(title).sym $^
@@ -63,6 +64,9 @@ obj/gb/%.2b: tilesets/%.png
 
 obj/gb/%.h.1b: tilesets/%.png
 	rgbgfx -d1 -h -o $@ $<
+
+obj/gb/%.1b: tilesets/%.png
+	rgbgfx -d1 -o $@ $<
 
 obj/gb/%.u.2b: tilesets/%.png
 	rgbgfx -o $@ $< -ut $(basename $(basename $@)).nam
