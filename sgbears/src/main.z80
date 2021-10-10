@@ -40,6 +40,7 @@ past_header:
   ldh [cur_keys], a
   ldh [hVblanks], a
   ldh [rIF], a
+
   inc a  ; ld a, IEF_VBLANK
   ldh [rIE], a
   ld a,P1F_GET_NONE
@@ -49,6 +50,16 @@ past_header:
   ld hl,hramcode_start
   ld de,run_dma
   call memcpy_pascal16
+
+  ; prevent bgb with all exceptions on from having a coronary
+  call lcd_off
+  xor a
+  ld hl, _OAMRAM
+  ld c, 160
+  rst memset_tiny
+  ld hl, SOAM
+  ld c, 160
+  rst memset_tiny
 
   call load_guest_pic
 
@@ -67,8 +78,6 @@ past_header:
     inc b
     jr nz, .spritevramexpandloop
 
-  ld a, %00011011
-  ldh [rBGP], a
   ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8800|LCDCF_BG9800|LCDCF_WINOFF
   ldh [rLCDC], a
 
@@ -201,8 +210,6 @@ past_header:
   call sgb_send_one_bear
 
   call load_guest_pic
-  ld a, %00011011
-  ldh [rBGP], a
   ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8800|LCDCF_BG9800|LCDCF_WINOFF
   ldh [rLCDC], a
   call sgb_unfreeze
@@ -213,6 +220,8 @@ past_header:
 
 load_guest_pic:
   call lcd_off
+  ld a, %00011011
+  ldh [rBGP], a
   ; Load Goldilocks sitting in Cubby's chair  
   ld de, Goldi_hmmm_pb16
   ld hl, _VRAM9000
