@@ -256,3 +256,23 @@ mul_a_de:
     cp $80
     jr nz, .loop
   ret
+
+;;
+; Divides HL by D putting result in HL and remainder in A; preserves CE
+div_hl_d:
+  xor a
+  ld b,16
+  .loop:
+    add hl, hl  ; AHL acts as a 24-bit value
+    adc a
+    ; If CF:A is at least D, subtract
+    jr c, .yes_subtract
+    cp d
+    jr c, .no_subtract
+    .yes_subtract:
+      sub d
+      inc l  ; increase the quotient
+    .no_subtract:
+    dec b
+    jr nz, .loop
+  ret

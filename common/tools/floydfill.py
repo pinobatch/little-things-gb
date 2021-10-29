@@ -105,12 +105,11 @@ Return a 2-tuple (bestdist, bestnode) where
             if dij == 0xFF: continue
             for k, djk in enumerate(bestdist[j]):
                 if i == k or j == k: continue
-                dik, djk = bestdist[i][k], bestdist[j][k]
+                dik = bestdist[i][k]
                 dijk = dij + djk
                 # If the best distance to K is via J, mark it so
                 if dijk < dik:
                     bestdist[i][k], bestnode[i][k] = dijk, nij
-                    done = False
     return bestdist, bestnode
 
 def get_method_names(methods):
