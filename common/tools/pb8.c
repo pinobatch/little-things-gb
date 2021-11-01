@@ -201,7 +201,7 @@ int unpb8(FILE *infp, FILE *outfp, size_t matchdist) {
       } else {
         c = fgetc(infp);  // Literal
         if (c == EOF) {
-          fprintf(stderr, "pb8: expectd literal; got EOF\n");
+          fprintf(stderr, "pb8: expected literal; got EOF\n");
           return EOF;  // read error
         }
       }
@@ -226,15 +226,17 @@ static inline void set_fd_binary(unsigned int fd) {
 #endif
 }
 
+#define MAX_BLOCKLENGTH (SIZE_MAX & ~(8 - 1))
+
 static const char *usage_msg =
 "usage: pb8 [-d] [-z] [-m dist] [-l blocklength] [infile [outfile]]\n"
 "Compresses a file using RLE with unary run and literal lengths.\n"
 "\n"
 "options:\n"
-"  -d                decompress\n"
-"  -l blocklength    allow RLE packets to span up to blocklength\n"
-"                      input bytes (multiple of 8; default 8)\n"
-"  -z                zero-flil each block's history when compressing\n"
+"  -d                decompress instead of compressing\n"
+"  -l blocksize      forbid RLE packets to span boundaries of blocksize\n"
+"                      input bytes (multiple of 8; default: unbounded)\n"
+"  -z                zero-fill each block's history when compressing\n"
 "                      (default: generate no references preceding\n"
 "                      start of each block)\n"
 "  -m dist           match distance (default 1; max 256)\n"
@@ -258,10 +260,12 @@ int main(int argc, char **argv) {
   const char *infilename = NULL;
   const char *outfilename = NULL;
   bool decompress = false, zerohistory = false;
-  size_t blocklength = 8, match_distance = 1;
+  size_t blocklength = MAX_BLOCKLENGTH, match_distance = 1;
 
   for (int i = 1; i < argc; ++i) {
     if (argv[i][0] == '-' && argv[i][1] != 0) {
+      /* Without the musl_getopt dependency, handle only a handful
+         of long options */
       if (!strcmp(argv[i], "--help")) {
         fputs(usage_msg, stdout);
         return 0;
@@ -292,7 +296,7 @@ int main(int argc, char **argv) {
           const char *endptr = NULL;
 
           unsigned long tvalue = strtoul(argvalue, (char **)&endptr, 10);
-          if (endptr == argvalue || tvalue == 0 || tvalue > SIZE_MAX) {
+          if (endptr == argvalue || tvalue == 0 || tvalue > MAX_BLOCKLENGTH) {
             fprintf(stderr, "pb8: block length %s not a positive integer\n",
                     argvalue);
             return EXIT_FAILURE;
