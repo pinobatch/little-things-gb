@@ -1,0 +1,8 @@
+palette inner
+#ffd6d6 #ef847b #a54242 #632121 |
+#ffd6d6 #ef847b #699efc #632121
+palette outer
+#ff00ff #b56352 #633a29 #420800
+#ffd6d6 #ef847b #a54242 #632121
+#a594de #6b639c #634a7b #ff00ff
+#8c6b63 #735252
