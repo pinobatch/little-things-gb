@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
+"""
+SGB inner+outer image converter
+
+Copyright 2012, 2018, 2019, 2021 Damian Yerrick
+License: zlib
+
+"""
 import os, sys, argparse
 from PIL import Image, ImageDraw, ImageChops
-import pilbmp2nes, uniq
+import pilbmp2nes, uniq, pb16
 
 # Argument and palette parsing ######################################
 
@@ -76,15 +83,11 @@ control over whether Floyd-Steinberg dithering is used.
         raise ValueError(
             "only RGB or L mode images can be quantized to a palette"
             )
+
+    # 0 means turn off dithering
     im = silf.im.convert("P", 1 if dither else 0, palette.im)
-    # the 0 above means turn OFF dithering
+    return silf._new(im)
 
-    try:
-        return silf._new(im)  # Name in Pillow 4+
-    except AttributeError:
-        return silf._makeself(im)  # Name in Pillow 3-
-
-# This is generalized from savtool.py
 def colorround(im, palettes, tilesize, subpalsize):
     """Find the best palette
 
@@ -93,17 +96,15 @@ palettes -- list of subpalettes [[(r, g, b), ...], ...]
 tilesize -- size in pixels of each tile as (x, y) tuple
 subpalsize -- the maximum number of colors in each subpalette to use
 
-Return ?
+Return a 2-tuple (final image, attribute map)
 """
-    # Generalized from a function in savtool.py
-    # Once documented, update 240p-test-mini/gameboy/tools/gbcnamtool.py
+    # Generalized from a function in savtool.py in nesbgeditor
 
     blockw, blockh = tilesize
     if im.mode != 'RGB':
         im = im.convert('RGB')
 
-    trials = []
-    all_colors = []
+    trials, all_colors = [], []
     onetile = Image.new('P', tilesize)
     for p in palettes:
         p = list(p[:subpalsize])
@@ -168,25 +169,62 @@ Return ?
         imfinal.paste(onetile, tilerect)
     return imfinal, attrs
 
+def get_bitreverse():
+    """Get a lookup table for horizontal flipping."""
+    br = bytearray([0x00, 0x80, 0x40, 0xC0])
+    for v in range(6):
+        bit = 0x20 >> v
+        br.extend(x | bit for x in br)
+    return br
+
+# Export formatting #################################################
+
+def color_tuple_to_bgr5(rgb):
+    r, g, b = rgb
+    return (
+        (b & 0xF8) << (10 - 3) | (g & 0xF8) << (5 - 3) | (r & 0xF8) >> 3
+    )
+
+def subpalette_to_bgr5(row, subpalsize=4):
+    """Convert the first 4 color tuples in a list to 5 bits per channel"""
+    row = [color_tuple_to_bgr5(x) for x in list(row)[:subpalsize]]
+    if len(row) < subpalsize:
+        row.extend([row[0]] * (subpalsize - len(row)))
+    return row
+
+def subpalette_to_asm(row, subpalsize=4):
+    """Convert the first 4 color tuples in a list to a DW statement"""
+    return "  dw " + ",".join("$%04x" % x
+                              for x in subpalette_to_bgr5(row, subpalsize))
+
+def subpalette_to_bin(row, subpalsize=4):
+    out = bytearray()
+    for i in subpalette_to_bgr5(row, subpalsize):
+        out.append(i & 0xFF)
+        out.append(i >> 8)
+    return out
+
+def pb16lines(data):
+    """Compress data with PB16 and print it in assembly language.
+
+data -- a byteslike or other iterable over ints 0-255
+
+return ([db_statement, ...], bytecount)
+each db_statement contains one PB16 packet, representing 8
+decompressed bytes, and lacks following \n
+"""
+    lines, bytecount = [], 0
+    for packet in pb16.pb16(data):
+        lines.append("  db " + ",".join("$%02x" % (b,) for b in packet))
+        bytecount += len(packet)
+    return lines, bytecount
+
 # Main ##############################################################
-
-def Image_open_load(fp, *a):
-    """Open and eagerly load an image file.
-
-Call load() on each image to free system resources associated
-with an opened and not loaded image.
-
-Return a Pillow image."""
-    im = Image.open(fp)
-    im.load()
-    return im
 
 def main(argv=None):
     args = parse_argv(argv or sys.argv)
     with open(args.palettes) as infp:
         palettes = load_palette_file(infp)
-    print("Loaded palettes")
-    print(palettes)
     dpalettes = dict(palettes)
 
     # Making a Pillow palette image requires a single RGB sequence
@@ -228,17 +266,98 @@ def main(argv=None):
     snesformat = lambda x: pilbmp2nes.formatTilePlanar(x, "0,1;2,3")
     innerchr = pilbmp2nes.pilbmp2chr(innerim, formatTile=gbformat)
     innerchr, innermap = uniq.uniq(innerchr)
-    print("inner: %d tiles, %d distinct" % (len(innermap), len(innerchr)))
 
+    # A Super Game Boy border can contain up to 256 unique tiles,
+    # one of which must be transparent so that the 160x144-pixel
+    # playfield can show through.  A program sends the border
+    # in three transfers: CHR_TRN 0 for tiles 0-127, CHR_TRN 1
+    # for tiles 128-255, and PCT_TRN for the tilemap and palette.
+    # SGBears sends the tiles specific to each partner in CHR 0
+    # and the common tiles in CHR 1.
     outerchr = list(zip(*(
         pilbmp2nes.pilbmp2chr(im, formatTile=snesformat) for im in ims
     )))
-    outeruniq = set(outerchr)
-    outerequal = [ts[0] for ts in outeruniq if all(t == ts[0] for t in ts)]
-    outervary = [ts for ts in outeruniq if not all(t == ts[0] for t in ts)]
-    print("outer: %d tiles, %d distinct, %d constant and %d varying"
-          % (len(outerchr), len(outeruniq), len(outerequal), len(outervary)))
-    
+
+    # Blank tile followed by other tiles in order of appearance
+    outerequal = [(bytes(32),)*4]
+    outerequal.extend(ts for ts in outerchr if all(t == ts[0] for t in ts))
+    outervary = [ts for ts in outerchr if not all(t == ts[0] for t in ts)]
+    outerequal, _ = uniq.uniq(outerequal)
+    outervary, _ = uniq.uniq(outervary)
+    outer_tstoid = {ts: 128 + i for i, ts in enumerate(outerequal)}
+    outer_tstoid.update((ts, i) for i, ts in enumerate(outervary))
+    outermap = [outer_tstoid[ts] for ts in outerchr]
+    outerequal = [ts[0] for ts in outerequal]
+
+    # Each tile can be flipped horizontally or vertically by setting
+    # bits in odd bytes of PCT_TRN.  If so, the tilemap data in the
+    # ROM needs to store which tiles are flipped.
+    # Pino tried horizontal flipping to save tiles in CHR 1.
+    # It cut 100 tiles to 84, which he deemed not enough to justify
+    # the decoding complexity.  Had flipping cut tiles from over
+    # 128 to under 128, it would have been worth it to keep common
+    # tiles from spilling into CHR 0.
+    if False:
+        bitrevlut = get_bitreverse()
+        outerflip = {bytes(bitrevlut[b] for b in t): t for t in outerequal}
+        outerequal_modflip = [
+            t for t in outerequal if outerflip.get(t, t) <= t
+        ]
+        print(";outer: %d constant remain distinct modulo flip"
+              % (len(outerequal_modflip)))
+
+    # Write SGB palette and attribute
+    out = []
+    out.append("Bears_pf_sgb_packets::  ; 32 bytes")
+    out.append("  db $01  ; PAL01: set playfield colors 0, 1, 2, 3, 5, 6, 7")
+    out.append(subpalette_to_asm(dpalettes["inner"][0], 4))
+    out.append(subpalette_to_asm(dpalettes["inner"][1][1:], 3))
+    out.append("  db $00  ; end PAL01")
+    # as mentioned earlier, this is hardcoded
+    out.append("  db $21, 2  ; ATTR_BLK: draw rectangles")
+    out.append("  db %101, %00000011  ; change outside to 0 and inside to 1")
+    out.append("  db 40/8, 104/8, 55/8, 127/8  ; left, top, right, bottom")
+    out.append("  ds 8, $00  ; pad to 16 bytes")
+    out.append("  db $00  ; end of sgb palettes")
+
+    # Write playfield tiles and tilemap
+    lines, pf_chr_bytes = pb16lines(b"".join(innerchr))
+    out.append("Bears_pf_pb16::  ; %d bytes" % (1 + pf_chr_bytes,))
+    out.append("  db %d  ; Playfield tile count" % (len(innerchr) % 256,))
+    out.extend(lines)
+    out.append("Bears_pf_tilemap::  ; 360 bytes")
+    out.append("  ; starts at 128 because BG CHR is at 9000/8800")
+    out.extend("  db " + ",".join("%3d" % ((t + 128) % 256,)
+                                  for t in innermap[i:i + 20])
+               for i in range(0, len(innermap), 20))
+
+    # Export common border tiles
+    lines, border_chr1_bytes = pb16lines(b"".join(outerequal))
+    out.append("Bears_border_chr1_pb16::  ; %d bytes" % (1 + border_chr1_bytes,))
+    out.append("  db %d  ; Border common tile count" % (len(outerequal),))
+    out.extend(lines)
+
+    for i, (filename, tiles) in enumerate(zip(args.image, zip(*outervary))):
+        lines, bear_bytes = pb16lines(b"".join(tiles))
+        out.append("Bears_border_chr0_%d_pb16::  ; %s, %d bytes"
+                   % (i, os.path.basename(filename), 1 + bear_bytes,))
+        out.append("  db %d  ; Tile count for this state" % (len(tiles),))
+        out.extend(lines)
+
+    # Export border tilemap and palette (for PCT_TRN)
+    lines, border_map_bytes = pb16lines(outermap)
+    out.append("Bears_border_tilemap_pb16::  ; %d bytes" % border_map_bytes)
+    out.extend(lines)    
+    out.append("Bears_border_palette::  ; 32 bytes")
+    out.append(subpalette_to_asm(dpalettes["outer"][0], 16))
+    out.append("Bears_border_palette_end::")
+
+    print("\n".join(out))
+
+    print(";inner: %d tiles, %d distinct" % (len(innermap), len(innerchr)))
+    print(";outer: %d tiles, %d distinct, %d constant and %d varying"
+          % (len(outerchr), len(outerequal) + len(outervary),
+             len(outerequal), len(outervary)))
 
 if __name__=='__main__':
     if 'idlelib' in sys.modules:
