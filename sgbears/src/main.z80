@@ -62,21 +62,7 @@ past_header:
   rst memset_tiny
 
   call load_guest_pic
-
-  ; Load the error message in case this isn't a Super Game Boy
-  ld de, menutiles_chr
-  ld hl, _VRAM8000
-  ld bc, 65536 - (playmate_chr.end - menutiles_chr)
-  .spritevramexpandloop:
-    ld a, [de]
-    inc de
-    ld [hl+], a
-    ld a, $FF
-    ld [hl+], a
-    inc c
-    jr nz, .spritevramexpandloop
-    inc b
-    jr nz, .spritevramexpandloop
+  call load_menu_tiles
 
   ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8800|LCDCF_BG9800|LCDCF_WINOFF
   ldh [rLCDC], a
@@ -121,13 +107,33 @@ past_header:
       jr .mono_forever
 
   .is_sgb:
-  ld hl, sgb_cmd_clear_attrs
+
+  ; Set the playfield palette
+  ld hl, Bears_pf_sgb_packets
   call sgb_send
-  ld hl, sgb_cmd_set_palette
   call sgb_send
+
+  ; Load initial border
+  call sgb_freeze
+  ld de, Bears_border_chr0_0_pb16  ; Border without bear
+  ld b, 0
+  call sgb_uncompress_chr_trn
+  ld de, Bears_border_chr1_pb16
+  ld b, 1
+  call sgb_uncompress_chr_trn
+  ld de, Bears_border_tilemap_pb16
+  call sgb_load_map_and_palette
+
+  ; And reload the playfield
+  call load_guest_pic
+  call load_menu_tiles
+  ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8800|LCDCF_BG9800|LCDCF_WINOFF
+  ldh [rLCDC], a
+  call sgb_unfreeze
+
+  ; Ask for a delay amount
   ld a, 60
   ldh [hDelayAmount], a
-
   .editloop:
     call read_pad
     ld b, PADF_LEFT|PADF_RIGHT
@@ -178,21 +184,21 @@ past_header:
     ld a, [new_keys]
     and PADF_A|PADF_START
     jr z, .editloop
-  
-  ; Now we're set up. Send Papa, tilemap, Cubby, Mama
-  call sgb_freeze
-  ld a, low(Bears_pb16)
-  ldh [hBearsSrc+0], a
-  ld a, high(Bears_pb16)
-  ldh [hBearsSrc+1], a
-  ld a, low(judgments_pb16)
-  ldh [hJudgmentsSrc+0], a
-  ld a, high(judgments_pb16)
-  ldh [hJudgmentsSrc+1], a
 
-  call sgb_send_one_bear
-  call sgb_send_bear_tilemap
-  ; At this point we're out of sgb_send_trn_ab, and LCD is off
+  call sgb_freeze
+  ld de, Bears_border_chr0_1_pb16  ; Papa
+  ld b, 0
+  call sgb_uncompress_chr_trn
+  ld de, Bears_border_tilemap_pb16
+  call sgb_load_map_and_palette
+
+  ; After receiving the tilemap and palette, Super Game Boy system
+  ; software waits about 1 second before receiving the CHR (tile)
+  ; data.  We test this by changing what bear's likeness is in CHR
+  ; in order to to have the correct bear loaded when it reads CHR.
+  ;
+  ; sgb_uncompress_chr_trn left us with the identity tilemap
+  ; sgb_load_map_and_palette left us with LCD off
   ld a, [hDelayAmount]
   or a
   jr z, .no_wait
@@ -206,8 +212,12 @@ past_header:
       jr nz, .delayAmount_loop
     di
   .no_wait:
-  call sgb_send_one_bear
-  call sgb_send_one_bear
+  ld de, Bears_border_chr0_2_pb16  ; Cubby
+  ld b, 0
+  call sgb_uncompress_chr_trn
+  ld de, Bears_border_chr0_3_pb16  ; Mama
+  ld b, 0
+  call sgb_uncompress_chr_trn
 
   call load_guest_pic
   ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8800|LCDCF_BG9800|LCDCF_WINOFF
@@ -218,157 +228,101 @@ past_header:
     halt
     jr .forever
 
+;;
+; Loads the scene with Goldilocks into GB VRAM
 load_guest_pic:
   call lcd_off
-  ld a, %00011011
+  ld a, %11100100
   ldh [rBGP], a
-  ; Load Goldilocks sitting in Cubby's chair  
-  ld de, Goldi_hmmm_pb16
-  ld hl, _VRAM9000
-  ld b, 128
+  ; Load Goldilocks in the bears' house
+  ld de, Bears_pf_pb16
+  ld a, [de]
+  ld b, a
+  inc de
+  ld hl, _VRAM8800
   call pb16_unpack_block
-  ld h, high(_VRAM8800)
-  ld b, 128
-  call pb16_unpack_block
-  ld hl, Goldi_hmmm_nam
+  ld hl, Bears_pf_tilemap
   ld de, _SCRN0
   jp load_full_nam
 
-BEAR_W = 5
-BEAR_H = 16
-JUDGMENT_W = 4
-JUDGMENT_H = 4
-JUDGMENT_START_TILE_ID = 80
-GAME_CUTOUT_TILE_ID = 96
-
-sgb_send_one_bear:
-  call lcd_off
+load_menu_tiles:
+  ; Load the error message in case this isn't a Super Game Boy
+  ld de, menutiles_chr
   ld hl, _VRAM8000
-
-  ; Load one bear's tiles
-  ldh a, [hBearsSrc+0]
-  ld e, a
-  ldh a, [hBearsSrc+1]
-  ld d, a
-  ld b, BEAR_W*BEAR_H*2
-  call pb16_unpack_block
-  ld a, e
-  ldh [hBearsSrc+0], a
-  ld a, d
-  ldh [hBearsSrc+1], a
-
-  ; Load one judgment's tiles
-  ldh a, [hJudgmentsSrc+0]
-  ld e, a
-  ldh a, [hJudgmentsSrc+1]
-  ld d, a
-  ld b, JUDGMENT_W*JUDGMENT_H
-  call pb16_unpack_block
-  ld a, e
-  ldh [hJudgmentsSrc+0], a
-  ld a, d
-  ldh [hJudgmentsSrc+1], a
-
-  ; Tiles at even X point to CHR RAM address of planes 0 and 1 of
-  ; a tile.  Tiles at odd X point to planes 2 and 3.
-  ; 0-79: the bear
-  ld hl, _SCRN0+640
-  push hl
-  xor a
-  ld c, BEAR_W*BEAR_H*2
-  ld hl, _SCRN0+640
-  call memset_inc
-
-  ; 80-95: the judgment
-  ld bc, 16 * 256 + JUDGMENT_START_TILE_ID * 2
-  .judgloop
-    ld a, c
+  ld bc, 65536 - (playmate_chr.end - menutiles_chr)
+  .spritevramexpandloop:
+    ld a, [de]
+    inc de
+    ld [hl+], a
+    ld a, $FF
+    ld [hl+], a
     inc c
-    ld [hl+], a
-    ld a, 1  ; share same first plane as tile 0
-    ld [hl+], a
-    dec b
-    jr nz, .judgloop
-  ld [hl+], a  ; 96: a blank tile for the game area cutout
-  ld [hl+], a
+    jr nz, .spritevramexpandloop
+    inc b
+    jr nz, .spritevramexpandloop
+  ret
 
-  pop hl
-  ld de, _SCRN0
-  call load_full_nam
-
-  ld a, $E4
-  ldh [rBGP], a
+;;
+; @param DE pointer to length-prefixed PB16-compressed SNES tiles
+; @param B 0 for CHR_TRN 0 (tiles 0-127) or 1 for CHR_TRN 1
+;     (tiles 128-255)
+; @return everything clobbered; identity tilemap in _SCRN0
+sgb_uncompress_chr_trn:
+  push bc
+  push de
+  call sgb_load_trn_tilemap
+  pop de
+  ld a, [de]
+  add a  ; each SNES tile is 2 GB tiles
+  ld b, a
+  inc de
+  ld hl, _VRAM8000
+  call pb16_unpack_block
+  pop bc
   ld a, $13*8+1  ; CHR_TRN
-  ld b, $00  ; uses only first half of obj
   jp sgb_send_trn_ab
 
-sgb_send_bear_tilemap:
-  call sgb_load_trn_tilemap
+;;
+; Loads an 896-entry PB16 compressed SGB border tilemap with no
+; flipping and one 16-color palette.
+; @param DE pointer to tilemap followed by palette
+; @param _SCRN0 identity tilemap
+; @param rBGP identity colormap
+sgb_load_map_and_palette:
+  ld hl, _VRAM8800
+  ld b, 896/16
+  call pb16_unpack_block
+  push de  ; Tilemap immediately followed by palette
 
-  ; The SGB border tilemap is 64 bytes per line, alternating tile ID
-  ; and VH01PP00 bytes where V and H are flip and P is subpalette
-  ld hl, _VRAM8000
-  ld bc, 65536-896*2
-  xor a
-  .clearloop:
-    ld [hl+], a
-    xor %00010000
-    inc c
-    jr nz, .clearloop
-    inc b
-    jr nz, .clearloop
-
-  ; Draw cutout.  Begins 5 rows from the top and 6 from the left
-  ld hl, _VRAM8000 + 64 * 5 + 2 * 6
-  ld a, GAME_CUTOUT_TILE_ID
-  ld b, 18
-  ld de, (32-20) * 2
-  .cutout_rowloop:
-    ld c, 20
-    .cutout_tileloop:
-      ld [hl+], a
-      inc l
-      dec c
-      jr nz, .cutout_tileloop
-    add hl, de
-    dec b
-    jr nz, .cutout_rowloop
-
-  ; Load bear and judgment tilemaps
-  ld hl, _VRAM8000 + 64 * 6 + 2 * 1
-  ld bc, 16*256+5
-  xor a
-  call sgb_set_tilemap_rect
-  ld hl, _VRAM8000 + 64 * 12 + 2 * 26
-  ld bc, 4*256+4
-  call sgb_set_tilemap_rect
-
-  ; Load palette
+  ; Pull 896 even bytes from tilemap and set odd bytes to $10
+  ; vhpcccnn
+  ; ||||||++- tile number bits 9-8 (always 0 for border)
+  ; |||+++--- palette ID (4 to 7 for border; we use only 4)
+  ; ||+------ priority (always 0 for border)
+  ; |+------- horizontal flip (Pino decided it's not worth complexity)
+  ; +-------- vertical flip (likewise)
   ld de, _VRAM8800
-  ld hl, Bears_pal
+  ld hl, _VRAM8000
+  ld bc, 65536 - 896
+  .interleave:
+    ld a, [de]
+    inc de
+    ld [hl+], a
+    ld a, $10
+    ld [hl+], a
+    inc c
+    jr nz, .interleave
+    inc b
+    jr nz, .interleave
+
+  ; Load the palette verbatim
+  pop hl
+  ld de, _VRAM8800
   ld bc, 32
   call memcpy
-
   ld a, $14*8+1  ; PCT_TRN
   ld b, $00
   jp sgb_send_trn_ab
-
-sgb_set_tilemap_rect:
-  push bc
-  push hl
-  .tileloop:
-    ld [hl+], a
-    inc a
-    inc l
-    dec c
-    jr nz, .tileloop
-  pop hl
-  pop bc
-  ld de, 64
-  add hl, de
-  dec b
-  jr nz, sgb_set_tilemap_rect
-  ret
 
 ;;
 ; Copies a B column by C row tilemap from HL to OAM starting at (D, E)
@@ -503,21 +457,11 @@ hramcode_end:
 
 
 section "gfx", ROM0
-Bears_pb16:
-  incbin "obj/gb/Bears_128.4b.pb16"
-Bears_pal:
-  incbin "obj/gb/Bears_128.pal"
-judgments_pb16:
-  incbin "obj/gb/judgments.2b.pb16"
 menutiles_chr:
   incbin "obj/gb/menutiles.1b"
 playmate_chr:
   incbin "obj/gb/sgb-playmate.1b"
   .end
-Goldi_hmmm_pb16:
-  incbin "obj/gb/Goldi_hmmm.u.2b.pb16"
-Goldi_hmmm_nam:
-  incbin "obj/gb/Goldi_hmmm.nam"
 
 delay_layout:
   dw 16  ; memcpy length

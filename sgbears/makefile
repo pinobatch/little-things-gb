@@ -1,7 +1,7 @@
 
 title := sgbears
 version := wip
-objlist := main ppuclear unpb16 pads sgb bcd
+objlist := main ppuclear unpb16 pads sgb bcd v3bears
 
 ifdef COMSPEC
 # Assume Windows
@@ -41,10 +41,10 @@ $(PB8): $(TOOLSDIR)/pb8.c
 obj/gb/%.o: src/%.z80 src/hardware.inc
 	rgbasm -o $@ $<
 
+obj/gb/%.o: obj/gb/%.z80
+	rgbasm -o $@ $<
+
 obj/gb/main.o: \
-  obj/gb/Bears_128.4b.pb16 obj/gb/Bears_128.pal \
-  obj/gb/Goldi_hmmm.u.2b.pb16 obj/gb/Goldi_hmmm.nam \
-  obj/gb/judgments.2b.pb16 \
   obj/gb/sgb-playmate.1b obj/gb/menutiles.1b
 
 $(title).gb: $(foreach o,$(objlist),obj/gb/$(o).o)
@@ -93,6 +93,10 @@ obj/gb/Bears_128.4b.pb16: $(PB8) obj/gb/Bears_128.4b
 obj/gb/judgments.2b.pb16: $(PB8) obj/gb/judgments.2b
 	$^ -m2 -l256 $@
 
+V3CONV := tools/v3conv.py
+
+obj/gb/v3bears.z80: $(V3CONV) tilesets/v3/palette.txt tilesets/v3/nobears.png tilesets/v3/papa_bear.png tilesets/v3/baby_bear.png tilesets/v3/mama_bear.png
+	$(PY) $(V3CONV) -o $@ --palettes $(wordlist 2, $(words $^), $^)
 
 # Packaging part ####################################################
 
@@ -112,4 +116,4 @@ clean:
 	# Don't remove tools in common folder
 	-rm tools/pngtochr$(DOTEXE) tools/pb8$(DOTEXE)
 	-rm obj/gb/*.pal obj/gb/*.1b obj/gb/*.2b obj/gb/*.4b obj/gb/*.nam
-	-rm obj/gb/*.o obj/gb/*.pb16 obj/gb/*.pb8
+	-rm obj/gb/*.o obj/gb/*.pb16 obj/gb/*.pb8 obj/gb/*.z80

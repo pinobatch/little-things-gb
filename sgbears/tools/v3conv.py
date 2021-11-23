@@ -16,6 +16,8 @@ def parse_argv(argv):
     p = argparse.ArgumentParser()
     p.add_argument("--palettes",
                    help="name of palette file")
+    p.add_argument("-o", "--output", default="-",
+                   help="name of asm output file (default: stdout)")
     p.add_argument("image", nargs="+",
                    help="PNG image files for each border state")
     return p.parse_args(argv[1:])
@@ -307,7 +309,7 @@ def main(argv=None):
               % (len(outerequal_modflip)))
 
     # Write SGB palette and attribute
-    out = []
+    out = ['''section "bearpics", ROM0''']
     out.append("Bears_pf_sgb_packets::  ; 32 bytes")
     out.append("  db $01  ; PAL01: set playfield colors 0, 1, 2, 3, 5, 6, 7")
     out.append(subpalette_to_asm(dpalettes["inner"][0], 4))
@@ -315,8 +317,8 @@ def main(argv=None):
     out.append("  db $00  ; end PAL01")
     # as mentioned earlier, this is hardcoded
     out.append("  db $21, 2  ; ATTR_BLK: draw rectangles")
-    out.append("  db %101, %00000011  ; change outside to 0 and inside to 1")
-    out.append("  db 40/8, 104/8, 55/8, 127/8  ; left, top, right, bottom")
+    out.append("  db %111, %00000101  ; change outside + border to 0 and inside to 1")
+    out.append("  db 56/8, 104/8, 80/8, 128/8  ; left, top, right, bottom")
     out.append("  ds 8, $00  ; pad to 16 bytes")
     out.append("  db $00  ; end of sgb palettes")
 
@@ -352,12 +354,12 @@ def main(argv=None):
     out.append(subpalette_to_asm(dpalettes["outer"][0], 16))
     out.append("Bears_border_palette_end::")
 
-    print("\n".join(out))
-
-    print(";inner: %d tiles, %d distinct" % (len(innermap), len(innerchr)))
-    print(";outer: %d tiles, %d distinct, %d constant and %d varying"
-          % (len(outerchr), len(outerequal) + len(outervary),
-             len(outerequal), len(outervary)))
+    out = "".join(line + "\n" for line in out)
+    if args.output == '-':
+        sys.stdout.write(out)
+    else:
+        with open(args.output, "w") as outfp:
+            outfp.write(out)
 
 if __name__=='__main__':
     if 'idlelib' in sys.modules:

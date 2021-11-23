@@ -94,6 +94,7 @@ sgb_send_if_sgb::
 ;;
 ; Sends a Super Game Boy packet starting at HL.
 ; Assumes no IRQ handler does any sort of controller autoreading.
+; @return HL first byte after end of last packet
 sgb_send::
 
   ; B: Number of remaining bytes in this packet
@@ -170,27 +171,6 @@ sgb_wait::
   ret
 
 section "sgbcode", ROM0
-; An activity that uses PAL01 instead of PAL_SET may need to
-; clear attributes first
-sgb_cmd_clear_attrs::
-  db $04*8+1  ; 1 packet holds up to 2 rectangles
-  db 1        ; number of rectangles
-
-  db %00000111  ; bit 0: inside, 1: border, 2: outside
-  db %00000000  ; inside and border to palette 0, outside to palette 0
-  db 0, 0, 19, 17
-
-  db 0, 0, 0, 0, 0, 0, 0, 0
-
-sgb_cmd_set_palette::
-  db $00*8+1  ; 1 packet holds up to 2 palettes
-
-  dw %0110001101011100  ; 0. white
-  dw %0010001100011100  ; 1. yellow
-  dw %0000000000011000  ; 2. red
-  dw %0000000000000000  ; 3. black
-  dw 0, 0, 0  ; 5, 6, 7: unused
-  db 0
 
 ;;
 ; Turns off the LCD, sets scroll to 0, sets BGP to identity ($E4),
