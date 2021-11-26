@@ -45,19 +45,13 @@ obj/gb/%.o: obj/gb/%.z80
 	rgbasm -o $@ $<
 
 obj/gb/main.o: \
-  obj/gb/sgb-playmate.1b obj/gb/menutiles.1b
+  obj/gb/sgb-playmate.1b obj/gb/menutiles.1b obj/gb/credit.1b.pb16
 
 $(title).gb: $(foreach o,$(objlist),obj/gb/$(o).o)
 	rgblink -dto $@ -m $(title).map -n $(title).sym $^
 	rgbfix -jsvt "THE THREE BEARS" -l0x33 -kP8 $@
 
 # Graphic conversion ################################################
-
-obj/gb/Bears_128.4b: $(PNGTOCHR) tilesets/Bears_128.png
-	$^ -W40 -H128 "-p0,1;2,3" --num-colors 16 -o $@
-
-obj/gb/Bears_128.pal: $(PNGTOCHR) tilesets/Bears_128.png
-	$^ -c 0BBBBBGGGGGRRRRR --little -o $@
 
 obj/gb/%.2b: tilesets/%.png
 	rgbgfx -o $@ $<
@@ -76,22 +70,20 @@ obj/gb/%.u.2b: tilesets/%.png
 obj/gb/%.nam: obj/gb/%.u.2b
 	test -f $< && test -f $@
 
+obj/gb/%.1b: tilesets/v3/%.png
+	rgbgfx -d1 -o $@ $<
+
 # Most compressed files are decompressed in one shot, or two in the
-# case of images that get decompressed to $9000 and $8800
+# case of a tileset that is decompressed to $9000 and $8800
 %.pb8: $(PB8) %
 	$^ -z -l2048 $@
 %.pb16: $(PB8) %
 	$^ -m2 -z -l2048 $@
 
-# Each bear (order Papa, Cubby, Mama)
-# is 40x128 pixels at 4bpp or 2560 bytes
-obj/gb/Bears_128.4b.pb16: $(PB8) obj/gb/Bears_128.4b
-	$^ -m2 -l2560 $@
+# credits is decompressed in a separate shot for each 13x2-tile cel
 
-# Each judgment (order too early, just right, too late)
-# is 40x128 pixels at 4bpp or 2560 bytes
-obj/gb/judgments.2b.pb16: $(PB8) obj/gb/judgments.2b
-	$^ -m2 -l256 $@
+obj/gb/credit.1b.pb16: $(PB8) obj/gb/credit.1b
+	$^ -m2 -z -l208 $@
 
 V3CONV := tools/v3conv.py
 

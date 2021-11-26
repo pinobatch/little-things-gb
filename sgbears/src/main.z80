@@ -1,20 +1,28 @@
 include "src/hardware.inc"
 include "src/global.inc"
 
-; Fadeout takes about one second.
-FADEOUT_TIME equ 14
+TITLE_CARD_WIDTH = 13
+TITLE_CARD_HEIGHT = 2
+TITLE_CARD_TIME = 360
+TITLE_CARD_COUNT = 3
+
+TITLE_CARD_BYTES = TITLE_CARD_WIDTH * TITLE_CARD_HEIGHT * 8
+TITLE_CARD_FIRST_TILE = 128 - (TITLE_CARD_WIDTH * TITLE_CARD_HEIGHT)
+TITLE_CARD_CHRBASE = $9000 + 16 * TITLE_CARD_FIRST_TILE
 
 section "hLocals", HRAM[hLocals]
   ds 16
 
 section "hState", HRAM
-hBearsSrc:     ds 2
-hJudgmentsSrc: ds 2
-hCapability::  ds 1
-hDelayAmount:: ds 1
+hTitleTimer:     ds 1
+hTitleCardsLeft: ds 1
+hTitleSrc:       ds 2
+hCapability::    ds 1
+hDelayAmount::   ds 1
 
 section "scratchbuffers", WRAM0
-help_line_buffer:: ds 32
+help_line_buffer:: ds TITLE_CARD_BYTES
+popslide_sp_save: ds 2
 
 STACK_SIZE EQU 64
 section "stack", WRAM0, ALIGN[2]
@@ -62,10 +70,8 @@ past_header:
   rst memset_tiny
 
   call load_guest_pic
+  call init_title_card
   call load_menu_tiles
-
-  ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8800|LCDCF_BG9800|LCDCF_WINOFF
-  ldh [rLCDC], a
 
   ldh a, [hCapability]
   add a
@@ -83,7 +89,7 @@ past_header:
   .is_gbc:
     ; On DMG/MGB and color systems, show a notice that this
     ; test works only on Super Game Boy
-    
+
     xor a
     ld [oam_used], a
     ld hl, help_line_buffer
@@ -97,16 +103,20 @@ past_header:
     call lcd_clear_oam
 
     ei
-    call wait_vblank_run_dma
+    call run_dma
     ld a, %11000000
     ldh [rOBP0], a
-    ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8800|LCDCF_BG9800|LCDCF_WINOFF|LCDCF_OBJON
+    ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8800|LCDCF_BG9800|LCDCF_WINOFF
     ldh [rLCDC], a
     .mono_forever:
+      call update_title_card
       halt
       jr .mono_forever
 
   .is_sgb:
+
+  ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8800|LCDCF_BG9800|LCDCF_WINOFF
+  ldh [rLCDC], a
 
   ; Set the playfield palette
   ld hl, Bears_pf_sgb_packets
@@ -135,6 +145,7 @@ past_header:
   ld a, 60
   ldh [hDelayAmount], a
   .editloop:
+    call update_title_card
     call read_pad
     ld b, PADF_LEFT|PADF_RIGHT
     call autorepeat
@@ -178,8 +189,6 @@ past_header:
     call wait_vblank_run_dma
     ld a, %11000000
     ldh [rOBP0], a
-    ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8800|LCDCF_BG9800|LCDCF_WINOFF|LCDCF_OBJON
-    ldh [rLCDC], a
     di
     ld a, [new_keys]
     and PADF_A|PADF_START
@@ -363,6 +372,140 @@ oam_put_rect:
   jr nz, oam_put_rect
   ret
 
+; Title card ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+init_title_card:
+  ; Set up nametable
+
+  ld hl, _SCRN0
+  ld de, _SCRN1
+  ld bc, 32*18
+  call memcpy
+
+  ld hl, _SCRN1 + 10 - TITLE_CARD_WIDTH / 2
+  ld a, TITLE_CARD_FIRST_TILE
+  ld b, TITLE_CARD_HEIGHT
+  .rowloop
+    ld c, TITLE_CARD_WIDTH
+    call memset_inc
+    ld de, 32 - TITLE_CARD_WIDTH
+    add hl, de
+    dec b
+    jr nz, .rowloop
+
+  ld de, TITLE_CARD_CHRBASE
+  ld h, $FF
+  ld bc, TITLE_CARD_BYTES*2
+  call memset
+
+  ld hl, hTitleTimer
+  ld [hl], 1  ; schedule next update immediately
+  inc hl
+  ld [hl], TITLE_CARD_COUNT
+  inc hl
+  ld [hl], low(credit_pb16)
+  inc hl
+  ld [hl], high(credit_pb16)
+  ret
+
+update_title_card:
+  ldh a, [hVblanks]
+  and $03
+  ret nz
+  ld hl, hTitleTimer
+  dec [hl]
+  ret nz
+  ld [hl], TITLE_CARD_TIME / 4
+  inc hl  ; HL = hTitleCardsLeft
+
+  ld a, [hl]
+  cp 1   ; CF set if cards left to show has reached zero
+  sbc a
+  and LCDCF_BG9C00
+  xor LCDCF_ON|LCDCF_BGON|LCDCF_BG8800|LCDCF_BG9C00|LCDCF_WINOFF|LCDCF_OBJON
+  ldh [rLCDC], a
+  and LCDCF_BG9C00
+  ret z  ; update card only if shown
+
+  ; Load and display one title card
+  dec [hl]
+  inc hl  ; HL = hTitleSrc
+  ld a, [hl+]
+  ld d, [hl]
+  ld e, a
+  ld hl, help_line_buffer
+  ld b, TITLE_CARD_BYTES / 16
+  call pb16_unpack_block
+  ld a, e               ; point to end of card's compressed data
+  ldh [hTitleSrc+0], a
+  ld a, d
+  ldh [hTitleSrc+1], a
+  ; fall through to blit_title_card
+
+blit_title_card:
+  ld hl, help_line_buffer
+  ld de, TITLE_CARD_CHRBASE
+  ld c, TITLE_CARD_BYTES / 4
+  ; fall through to popslide_1to2bpp
+
+;;
+; Expands 1bpp tiles to 2bpp as colors 0 and 3 using a stack copy.
+; @param HL source address (usually ROM or WRAM)
+; @param DE destination address (usually VRAM)
+; @param C number of half tiles) to expand
+; @return C = 0; IME on
+popslide_1to2bpp::
+  di
+  ldh a, [rIE]    ; save interrupt config and stack pointer
+  push af
+  ldh a, [rSTAT]
+  push af
+  ld [popslide_sp_save],sp
+
+  ld a, IEF_LCDC  ; set hblank as only interrupt that ends HALT
+  ld [rIE], a
+  ld a, STATF_MODE00
+  ld [rSTAT], a
+  ld sp, hl     ; set SP to the source address
+  ld hl, rLCDC
+  set 7, [hl]
+  ld h,d        ; and HL to the destination
+  ld l,e
+
+  .loop
+    xor a  ; discard interrupt
+    ldh [rIF], a
+  
+    pop de  ; read before hblank
+    ld b, d
+    ld a, e
+    pop de
+    halt
+    ld [hl+], a
+    ld [hl+], a
+    ld a, b
+    ld [hl+], a
+    ld [hl+], a
+    ld a, e
+    ld [hl+], a
+    ld [hl+], a
+    ld a, d
+    ld [hl+], a
+    ld [hl+], a
+    dec c
+    jr nz, .loop
+
+  ld sp, popslide_sp_save  ; restore stack pointer
+  pop hl                   ; optimization thanks to NieDzejkob
+  ld sp, hl
+  pop af
+  ldh [rSTAT], a           ; restore interrupt config
+  pop af
+  ldh [rIE],a
+  reti
+
+; memcpy and friends ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 section "memset_tiny",ROM0[$08]
 ;;
 ; Writes C bytes of value A starting at HL.
@@ -462,6 +605,8 @@ menutiles_chr:
 playmate_chr:
   incbin "obj/gb/sgb-playmate.1b"
   .end
+credit_pb16:
+  incbin "obj/gb/credit.1b.pb16"
 
 delay_layout:
   dw 16  ; memcpy length
