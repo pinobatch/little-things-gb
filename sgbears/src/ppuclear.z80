@@ -42,6 +42,11 @@ SECTION "vblank_handler", ROM0[$0040]
   pop af
   reti
 
+; VisualBoyAdvance 1.7 requires a handler for all interrupts
+; enabled in rIE, even those used only during di halt
+SECTION "stat_handler", ROM0[$0048]
+  reti
+
 ; A lot of this file is broken into little tiny sections, one for
 ; each routine, so that the linker can squeeze them into tiny holes
 ; between aligned or fixed-address sections

@@ -1,3 +1,8 @@
+The Three Bears
+===============
+
+A test ROM for Super Game Boy
+
 The story so far
 ----------------
 
@@ -30,3 +35,9 @@ This test ROM creates a similar situation with these steps:
 4. After a delay, `CHR_TRN` with Mama saying "too late"
 
 [Pan Docs issue #199]: https://github.com/gbdev/pandocs/issues/199
+
+Credits
+-------
+
+Concept and program by Damian Yerrick  
+Illustrated by yoeynsf <https://www.instagram.com/yoey.nsf>
