@@ -293,7 +293,14 @@
     .elseif .xmatch ({src}, hl)
       .byte $29
     .elseif .xmatch ({src}, sp)
-      .byte $39
+      .ifnblank arg3
+        ; add hl, sp, value
+        ; same as ld hl, sp+value
+        .byte $F8
+        _sm83_sbyte arg3
+      .else
+        .byte $39
+      .endif
     .else
       .error "add hl: unknown source"
     .endif
