@@ -1,0 +1,197 @@
+; uaflag
+; display blue and gold on your SGB/GBC
+; ukraine, lower austria, texas a&m, ...
+
+; first, an abbreviated hardware.inc
+
+_SCRN0       EQU $9800 ; $9800->$9BFF
+rP1 EQU $FF00
+rNR52 EQU $FF26
+rLCDC EQU $FF40
+LCDCF_ON      EQU %10000000 ; LCD Control Operation
+LCDCF_BGON    EQU %00000001 ; BG Display
+rSCY EQU $FF42
+rSCX EQU $FF43
+rLY EQU $FF44
+rBGP EQU $FF47
+rBCPS EQU $FF68
+rBCPD EQU $FF69
+rIE EQU $FFFF
+SIZEOF_SGB_PACKET equ 16
+
+;;
+; Syntax: drgb $FF9966 for color #FF9966
+; Divides each hex tuplet by 8 and rounds down. 
+drgb: macro
+  dw (\1 & $F80000) >> 19 | (\1 & $00F800) >> 6 | (\1 & $0000F8) << 7
+  endm
+
+
+ section "init", ROM0[$0100]
+  nop
+  jp reset
+  ds 76, $00
+reset:
+  di
+  ld sp, $D000
+
+  ; we set the GB palettes and the GBC palettes and the SGB palettes
+  ; we don't care what's actually running
+  .vwait:
+    ldh a, [rLY]
+    xor 144
+    jr nz, .vwait
+  ldh [rLCDC], a  ; screen off
+  ldh [rNR52], a  ; a moment of silence for ukraininans who gave their lives
+  ldh [rIE], a    ; all ints off
+  ldh [rSCY], a   ; no scroll
+  ldh [rSCX], a
+
+  ; tiles 0-2 are color 0, 1, and 3
+  ld hl, $9000
+  ld a, $00
+  call memset_tiny_16
+  ld c, 16
+  .color1
+    cpl
+    ld [hl+], a
+    dec c
+    jr nz, .color1
+  cpl
+  call memset_tiny_16
+
+  ; set tilemap
+  ld hl, _SCRN0
+  ld a, 1  ; sky blue
+  ld c, 32*2
+  call memset_tiny
+  inc a    ; strong azure
+  ld c, 32*7
+  call memset_tiny
+  xor a    ; yellow
+  ld c, 32*7
+  call memset_tiny
+  inc a    ; sky blue
+  call memset_tiny
+
+  ; set GBC colors
+  ld bc, $0800 | low(rBCPS)
+  ld a, $80
+  ldh [c], a  ; seek to start
+  inc c       ; point to BCPD
+  ld hl, sgbpacket+1
+  .gbccolors
+    ld a, [hl+]
+    ldh [c], a
+    dec b
+    jr nz, .gbccolors
+
+  ; turn on the screen now
+  ld a, %11100100  ; set GB/SGB colors to identity
+  ldh [rBGP], a
+  ld a, LCDCF_ON|LCDCF_BGON
+  ldh [rLCDC], a
+
+  ; wait half a second for SGB to finish booting
+  ld bc, 65536 - (70224 / 4 * 30 / 14)
+  call wait14bc
+  
+  ld hl, sgbpacket
+  call sgb_send
+
+forever:
+  halt
+  nop
+  jr forever
+
+memset_tiny_16:
+  ld c, 16
+memset_tiny:
+  ld [hl+], a
+  dec c
+  jr nz, memset_tiny
+  ret
+
+wait14bc:
+  call .knownret
+  inc c
+  jr nz, wait14bc
+  inc b
+  jr nz, wait14bc
+.knownret:
+  ret
+
+
+;;
+; Sends a Super Game Boy packet starting at HL.
+; Assumes no IRQ handler does any sort of controller autoreading.
+; @return HL first byte after end of last packet
+sgb_send::
+
+  ; B: Number of remaining bytes in this packet
+  ; C: Number of remaining packets
+  ; D: Remaining bit data
+  ld a,$07
+  and [hl]
+  ret z
+  ld c,a
+
+.packetloop:
+  ; Start transfer by asserting both halves of the key matrix
+  ; momentarily.  (This is like strobing an NES controller.)
+  xor a
+  ldh [rP1],a
+  ld a,$30
+  ldh [rP1],a
+  ld b,SIZEOF_SGB_PACKET
+.byteloop:
+  ld a,[hl+]  ; Read a byte from the packet
+
+  ; Put bit 0 in carry and the rest (and a 1) into D.  Once this 1
+  ; is shifted out of D, D is 0 and the byte is finished.
+  ; (PB16 and IUR use the same principle for loop control.)
+  scf      ; A = hgfedcba, CF = 1
+  rra      ; A = 1hgfedcb, CF = a
+  ld d,a
+.bitloop:
+  ; Send a 1 as $10 then $30, or a 0 as $20 then $30.
+  ; This is constant time thanks to ISSOtm, unlike SGB BIOS
+  ; which takes 1 mcycle longer to send a 0 then a 1.
+  ld a,$10
+  jr c, .bitIs1
+  add a,a ; ld a,$20
+.bitIs1:
+  ldh [rP1],a
+  ld a,$30
+  ldh [rP1],a
+
+  ldh a, [rIE]  ; Burn 3 cycles to retain original loops's speed
+
+  ; Advance D to next bit (this is like NES MMC1)
+  srl d
+  jr nz,.bitloop
+  dec b
+  jr nz,.byteloop
+
+  ; Send $20 $30 as end of packet
+  ld a,$20
+  ld [rP1],a
+  ld a,$30
+  ld [rP1],a
+
+  ld bc, 65536 - (70224 / 4 * 4 / 14)
+  call wait14bc
+  dec c
+  jr nz,.packetloop
+  ret
+
+sgbpacket:
+  db $01  ; PAL01: set playfield colors 0, 1, 2, 3, 5, 6, 7
+  drgb $FFD700  ; yellow (e.g. pantone coated yellow 012 C)
+  drgb $99AAFF  ; sky blue
+  drgb $FF00FF  ; unused color 2
+  drgb $0057B7  ; strong azure (e.g. pantone coated 2935 C)
+  drgb $99AAFF
+  drgb $FF00FF
+  drgb $0057B7
+  db $00  ; end PAL01
