@@ -606,26 +606,33 @@ prevlabel:
   dec ixl
   ld ixl, $E2
 
+  inc [ix]
   inc [ix+$43]
+  dec [ix]
   dec [ix+$53]
+  ld [ix], $DD
   ld [ix+$63], $DD
   add ix, sp
 
   ld b, ixh
   ld b, ixl
+  ld b, [ix]
   ld b, [ix+$64]
   ld b, [ix-$23]
   ld c, ixh
   ld c, ixl
+  ld c, [ix]
   ld c, [ix+$11]
   ld c, [ix-$23]
 
   ld d, ixh
   ld d, ixl
+  ld d, [ix]
   ld d, [ix+$65]
   ld d, [ix-$23]
   ld e, ixh
   ld e, ixl
+  ld e, [ix]
   ld e, [ix+$11]
   ld e, [ix-$23]
 
@@ -635,6 +642,7 @@ prevlabel:
   ld ixh, e
   ld ixh, ixh
   ld ixh, ixl
+  ld h, [ix]
   ld h, [ix+$66]
   ld h, [ix-$13]
   ld ixh, a
@@ -644,6 +652,7 @@ prevlabel:
   ld ixl, e
   ld ixl, ixh
   ld ixl, ixl
+  ld l, [ix]
   ld l, [ix+$11]
   ld l, [ix-$1A]
   ld ixl, a
@@ -664,42 +673,51 @@ prevlabel:
   ld [ix-$23], a
   ld a, ixh
   ld a, ixl
+  ld a, [ix]
   ld a, [ix+$11]
   ld a, [ix-$23]
 
   add a, ixh
   add a, ixl
+  add a, [ix]
   add a, [ix+$11]
   add a, [ix-$7A]
   adc a, ixh
   adc a, ixl
+  adc a, [ix]
   adc a, [ix+$11]
   adc a, [ix-$72]
 
   sub a, ixh
   sub a, ixl
+  sub a, [ix]
   sub a, [ix+$11]
   sub a, [ix-$6A]
   sbc a, ixh
   sbc a, ixl
+  sbc a, [ix]
   sbc a, [ix+$11]
   sbc a, [ix-$62]
 
   and a, ixh
   and a, ixl
+  and a, [ix]
   and a, [ix+$11]
   and a, [ix-$5A]
   xor a, ixh
   xor a, ixl
+  xor a, [ix]
   xor a, [ix+$11]
   xor a, [ix-$52]
 
   or a, ixh
   or a, ixl
+  or a, [ix]
   or a, [ix+$11]
   or a, [ix-$4A]
   cp a, ixh
   cp a, ixl
+  cp a, [ix]
   cp a, [ix+$11]
   cp a, [ix-$42]
 
@@ -713,7 +731,9 @@ prevlabel:
   rrc [ix-$20]
   rl [ix+$61]
   rr [ix-$1F]
+  sla [ix]
   sla [ix+$62]
+  sra [ix]
   sra [ix-$1E]
   sll [ix+$63]
   srl [ix-$1D]
@@ -725,6 +745,7 @@ prevlabel:
   bit 5, [ix-$1A]
   bit 6, [ix+$67]
   bit 7, [ix-$19]
+  bit 7, [ix]
   res 0, [ix+$68]
   res 1, [ix-$18]
   res 2, [ix+$69]
@@ -733,6 +754,7 @@ prevlabel:
   res 5, [ix-$16]
   res 6, [ix+$6B]
   res 7, [ix-$15]
+  res 7, [ix]
   set 0, [ix+$6C]
   set 1, [ix-$14]
   set 2, [ix+$6D]
@@ -741,6 +763,7 @@ prevlabel:
   set 5, [ix-$12]
   set 6, [ix+$6F]
   set 7, [ix-$11]
+  set 7, [ix]
 
 ; PREFIX ED ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -832,28 +855,35 @@ prevlabel:
   dec iyl
   ld iyl, $E2
 
+  inc [iy]
   inc [iy+$43]
+  dec [iy]
   dec [iy+$53]
-  ld [iy+$63], $DD
+  ld [iy], $DF
+  ld [iy+$63], $DF
   add iy, sp
 
   ld b, iyh
   ld b, iyl
+  ld b, [iy]
   ld b, [iy+$64]
-  ld b, [iy-$23]
+  ld b, [iy-3]
   ld c, iyh
   ld c, iyl
+  ld c, [iy]
   ld c, [iy+$11]
-  ld c, [iy-$23]
+  ld c, [iy-3]
 
   ld d, iyh
   ld d, iyl
+  ld d, [iy]
   ld d, [iy+$65]
-  ld d, [iy-$23]
+  ld d, [iy-3]
   ld e, iyh
   ld e, iyl
+  ld e, [iy]
   ld e, [iy+$11]
-  ld e, [iy-$23]
+  ld e, [iy-3]
 
   ld iyh, b
   ld iyh, c
@@ -861,6 +891,7 @@ prevlabel:
   ld iyh, e
   ld iyh, iyh
   ld iyh, iyl
+  ld h, [iy]
   ld h, [iy+$66]
   ld h, [iy-$13]
   ld iyh, a
@@ -870,62 +901,79 @@ prevlabel:
   ld iyl, e
   ld iyl, iyh
   ld iyl, iyl
+  ld l, [iy]
   ld l, [iy+$11]
   ld l, [iy-$1A]
   ld iyl, a
 
+  ld [iy], b
   ld [iy+$07], b
-  ld [iy-$23], b
+  ld [iy-3], b
+  ld [iy], c
   ld [iy+$17], c
-  ld [iy-$23], c
+  ld [iy-3], c
+  ld [iy], d
   ld [iy+$27], d
-  ld [iy-$23], d
+  ld [iy-3], d
+  ld [iy], e
   ld [iy+$37], e
-  ld [iy-$23], e
+  ld [iy-3], e
+  ld [iy], h
   ld [iy+$47], h
-  ld [iy-$23], h
+  ld [iy-3], h
+  ld [iy], l
   ld [iy+$57], l
-  ld [iy-$23], l
+  ld [iy-3], l
+  ld [iy], a
   ld [iy+$77], a
-  ld [iy-$23], a
+  ld [iy-3], a
   ld a, iyh
   ld a, iyl
+  ld a, [iy]
   ld a, [iy+$11]
-  ld a, [iy-$23]
+  ld a, [iy-3]
 
   add a, iyh
   add a, iyl
+  add a, [iy]
   add a, [iy+$11]
   add a, [iy-$7A]
   adc a, iyh
   adc a, iyl
+  adc a, [iy]
   adc a, [iy+$11]
   adc a, [iy-$72]
 
   sub a, iyh
   sub a, iyl
+  sub a, [iy]
   sub a, [iy+$11]
   sub a, [iy-$6A]
   sbc a, iyh
   sbc a, iyl
+  sbc a, [iy]
   sbc a, [iy+$11]
   sbc a, [iy-$62]
 
   and a, iyh
   and a, iyl
+  and a, [iy]
   and a, [iy+$11]
   and a, [iy-$5A]
   xor a, iyh
   xor a, iyl
+  xor a, [iy]
   xor a, [iy+$11]
   xor a, [iy-$52]
 
   or a, iyh
   or a, iyl
+  or a, [iy]
   or a, [iy+$11]
   or a, [iy-$4A]
   cp a, iyh
   cp a, iyl
+  cp a, [iy]
   cp a, [iy+$11]
   cp a, [iy-$42]
 
@@ -935,7 +983,9 @@ prevlabel:
   jp iy
   ld sp, iy
 
+  rlc [iy]
   rlc [iy+$60]
+  rrc [iy]
   rrc [iy-$20]
   rl [iy+$61]
   rr [iy-$1F]
@@ -943,6 +993,7 @@ prevlabel:
   sra [iy-$1E]
   sll [iy+$63]
   srl [iy-$1D]
+  bit 0, [iy]
   bit 0, [iy+$64]
   bit 1, [iy-$1C]
   bit 2, [iy+$65]
@@ -951,6 +1002,7 @@ prevlabel:
   bit 5, [iy-$1A]
   bit 6, [iy+$67]
   bit 7, [iy-$19]
+  res 0, [iy]
   res 0, [iy+$68]
   res 1, [iy-$18]
   res 2, [iy+$69]
@@ -959,6 +1011,7 @@ prevlabel:
   res 5, [iy-$16]
   res 6, [iy+$6B]
   res 7, [iy-$15]
+  set 0, [iy]
   set 0, [iy+$6C]
   set 1, [iy-$14]
   set 2, [iy+$6D]

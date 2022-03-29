@@ -159,6 +159,13 @@
       .byte (op)^$06
       _z80_sbyte -(.mid (3, .tcount ({src})-4, {src}))
     .endif
+  .elseif .xmatch ({src}, [ix])
+    .byte $DD
+    .ifnblank preop
+      .byte preop, 0, (op)^$06
+    .else
+      .byte (op)^$06, 0
+    .endif
   .elseif .xmatch (.left(3, {src}), [iy+) && .xmatch (.right (1, {src}), ])
     .byte $FD
     .ifnblank preop
@@ -178,6 +185,13 @@
     .else
       .byte (op)^$06
       _z80_sbyte -(.mid (3, .tcount ({src})-4, {src}))
+    .endif
+  .elseif .xmatch ({src}, [iy])
+    .byte $FD
+    .ifnblank preop
+      .byte preop, 0, (op)^$06
+    .else
+      .byte (op)^$06, 0
     .endif
   .elseif .xmatch ({src}, a)
     .ifnblank preop
@@ -348,6 +362,13 @@
     .byte $DD
     _i8080_regsrc $70, $36, {src}
     _z80_sbyte -(.mid (3, .tcount ({dst})-4, {dst}))
+  .elseif .xmatch ({dst}, [ix])
+    .if .xmatch ({src}, [hl])
+      .error "ld is a halt"
+    .endif
+    .byte $DD
+    _i8080_regsrc $70, $36, {src}
+    .byte 0
   .elseif .xmatch (.left(3, {dst}), [iy+) && .xmatch (.right (1, {dst}), ])
     .if .xmatch ({src}, [hl])
       .error "ld is a halt"
@@ -362,6 +383,13 @@
     .byte $FD
     _i8080_regsrc $70, $36, {src}
     _z80_sbyte -(.mid (3, .tcount ({dst})-4, {dst}))
+  .elseif .xmatch ({dst}, [iy])
+    .if .xmatch ({src}, [hl])
+      .error "ld is a halt"
+    .endif
+    .byte $FD
+    _i8080_regsrc $70, $36, {src}
+    .byte 0
 
   ; Destination A
   .elseif .xmatch ({dst}, a)
@@ -403,12 +431,16 @@
     .elseif .xmatch (.left(3, {src}), [ix-) && .xmatch (.right (1, {src}), ])
       .byte $DD,$7E
       _z80_sbyte -(.mid (3, .tcount ({src})-4, {src}))
+    .elseif .xmatch ({src}, [ix])
+      .byte $DD,$7E,$00
     .elseif .xmatch (.left(3, {src}), [iy+) && .xmatch (.right (1, {src}), ])
       .byte $FD,$7E
       _z80_sbyte (.mid (3, .tcount ({src})-4, {src}))
     .elseif .xmatch (.left(3, {src}), [iy-) && .xmatch (.right (1, {src}), ])
       .byte $FD,$7E
       _z80_sbyte -(.mid (3, .tcount ({src})-4, {src}))
+    .elseif .xmatch ({src}, [iy])
+      .byte $FD,$7E,$00
     .elseif .xmatch (.left (1, {src}), [) && .xmatch (.right (1, {src}), ])
       .byte $3A
       .word .mid (1, .tcount ({src})-2, {src})
@@ -564,12 +596,16 @@
   .elseif .xmatch (.left(3, {src}), [ix-) && .xmatch (.right (1, {src}), ])
     .byte $DD,$34
     _z80_sbyte -(.mid (3, .tcount ({src})-4, {src}))
+  .elseif .xmatch ({src}, [ix])
+    .byte $DD,$34,$00
   .elseif .xmatch (.left(3, {src}), [iy+) && .xmatch (.right (1, {src}), ])
     .byte $FD,$34
     _z80_sbyte (.mid (3, .tcount ({src})-4, {src}))
   .elseif .xmatch (.left(3, {src}), [iy-) && .xmatch (.right (1, {src}), ])
     .byte $FD,$34
     _z80_sbyte -(.mid (3, .tcount ({src})-4, {src}))
+  .elseif .xmatch ({src}, [iy])
+    .byte $FD,$34,$00
   .else
     .error "inc: unknown source"
   .endif
@@ -618,12 +654,16 @@
   .elseif .xmatch (.left(3, {src}), [ix-) && .xmatch (.right (1, {src}), ])
     .byte $DD,$35
     _z80_sbyte -(.mid (3, .tcount ({src})-4, {src}))
+  .elseif .xmatch ({src}, [ix])
+    .byte $DD,$35,$00
   .elseif .xmatch (.left(3, {src}), [iy+) && .xmatch (.right (1, {src}), ])
     .byte $FD,$35
     _z80_sbyte (.mid (3, .tcount ({src})-4, {src}))
   .elseif .xmatch (.left(3, {src}), [iy-) && .xmatch (.right (1, {src}), ])
     .byte $FD,$35
     _z80_sbyte -(.mid (3, .tcount ({src})-4, {src}))
+  .elseif .xmatch ({src}, [iy])
+    .byte $FD,$35,$00
   .else
     .error "inc: unknown source"
   .endif
