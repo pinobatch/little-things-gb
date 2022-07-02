@@ -759,9 +759,11 @@ precedingglobalsymbol:
   mov a, [hl]
   mov a, a
 
-  ; $E2, $EA, $F2, $F8, $F9, $FA
+  ; $E2, $E9, $EA, $F2, $F8, $F9, $FA
   ldh [c], a
   mov [$ff00+c], a
+  ld pc, hl
+  mov pc, hl
   mov [$aeae], a
   ldh a, [c]
   mov a, [$ff00+c]

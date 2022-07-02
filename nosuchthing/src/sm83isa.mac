@@ -191,6 +191,8 @@
       .byte $31
       .word src
     .endif
+  .elseif .xmatch ({dst}, pc) && .xmatch ({src}, hl)
+    .byte $E9
 
   ; Source A, destination memory
   .elseif .xmatch ({src}, a)
@@ -284,7 +286,7 @@
   .byte $07
 .endmacro
 
-.macro add dst, src
+.macro add dst, src, arg3
   .if .xmatch ({dst}, hl)
     .if .xmatch ({src}, bc)
       .byte $09

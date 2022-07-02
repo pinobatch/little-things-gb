@@ -506,6 +506,8 @@
       .byte $31
       .word src
     .endif
+  .elseif .xmatch ({dst}, pc) && .xmatch ({src}, hl)
+    .byte $E9
 
   ; Source A, destination memory
   .elseif .xmatch ({src}, a)
