@@ -29,7 +29,7 @@ def parse_argv(argv):
     return args
 
 def rgbasm_bytearray(s):
-    s = ['  dw ' + ','.join("$%02x" % ch for ch in s[i:i + 16])
+    s = ['  db ' + ','.join("$%02x" % ch for ch in s[i:i + 16])
          for i in range(0, len(s), 16)]
     return '\n'.join(s)
 
@@ -56,7 +56,7 @@ def vwf4read(im, tilewidth, tileheight):
                     for x in range(col, col + 4):
                         thisbyte <<= 1
                         p = pixels[x, y]
-                        thisbyte |= ((2 & p) << 3) | (1 & p)
+                        thisbyte |= ((2 & p) >> 1) | ((1 & p) << 4)
                     thiscol.append(thisbyte)
             glyphs.append(cols)
     return glyphs
@@ -72,7 +72,7 @@ def pack_glyph(cols):
             continue
         leading0 = len(col) - len(col.lstrip(ZEROBYTE))
         del col[:leading0]  # trim leading zeroes
-        out.append(leading0 << 4 | (len(col) - 1))
+        out.append((leading0 << 4) | ((len(col) - 1) << 0))
         out.extend(col)
     out.append(0xFF)  # FF terminator
     return out
@@ -90,7 +90,7 @@ def main(argv=None):
                 len(glyphdata) * 2 + total_glyphdata),
              'section "vwf4_glyphdata", ROM0, ALIGN[1]',
              "vwf4_glyphstarts::"]
-    lines.extend("  db vwf4_glyph%2x" % (c + 0x20,)
+    lines.extend("  dw vwf4_glyph%2x" % (c + 0x20,)
                  for c in range(len(glyphdata)))
     for c, glyph in enumerate(glyphdata):
         lines.append("vwf4_glyph%2x:  ; %s" % (c + 0x20, chr(c + 0x20)))

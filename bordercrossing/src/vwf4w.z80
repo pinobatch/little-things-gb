@@ -1,0 +1,168 @@
+section "vwf ram", WRAM0, align[9]
+;;
+; The render buffer is 128x16 pixels.
+; While the buffer is in "composition format", each byte contains 4x1
+; pixels with plane 1 in  bits 7-4 and plane 0 in bits 3-0.
+; 4x16-pixel strips start at 0, 1, 32, 33, 64, 65, ..., 480, 481.
+; Pixels are stored at base address plus 0, 2, 4, ..., 30.
+wVWFRenderBuffer:: ds $200
+
+section "vwf4x16", ROM0
+;;
+; Converts wVWFRenderBuffer in place from composition format to GB
+; CHR format (.2bpp).  Processes (I think) 25 cycles per sliver,
+; completing in 6400 cycles.
+Vwf16ConvertToCHR::
+  ld hl, wVWFRenderBuffer
+  ld b, l
+.loop:
+  ld a, [hl+]
+  ld d, a      ; D=F E D C  7 6 5 4
+  ld a, [hl-]  ; A=B A 9 8  3 2 1 0
+  swap a       ; A=3 2 1 0  B A 9 8
+  xor d        ; A=F3E2D1C0 7B6A5948
+  and $0F      ; A=L L L L  7B6A5948
+  ld e, a
+  xor d        ; A=F E D C  B A 9 8
+  ld [hl+], a
+  ld a, [hl]   ; A=B A 9 8  3 2 1 0
+  swap e       ; E=7B6A5948 L L L L
+  xor e        ; A=7 6 5 4  3 2 1 0
+  ld [hl+], a
+  dec b
+  jr nz, .loop
+  ret
+
+;;
+; Makes a particular area white-on-black.
+; Used used for the top and bottom lines.
+Vwf16Invert::
+  ld hl, wVWFRenderBuffer
+  ld b, l
+.loop:
+  ld a, [hl+]
+  cpl
+  ld [hl+], a
+  ld a, [hl+]
+  cpl
+  ld [hl+], a
+  dec b
+  jr nz, .loop
+  ret
+
+Vwf16Clear::
+  ld hl, wVWFRenderBuffer
+  ld b, l
+  ld a, l
+.loop:
+  ld [hl+], a
+  ld [hl+], a
+  dec b
+  jr nz, .loop
+  ret
+
+;;
+; Sets an 8*C by 16 pixel area of tilemap to a line of VWF canvas.
+; 20 22 24 26 28 2A
+; 21 23 25 27 29 2B
+; @param B starting tile ID in canvas
+; @param C width in tiles
+; @param HL destination in tilemap space ($9800-$9FFF)
+Vwf16SetTilemap::
+  push bc
+  push hl
+  call .oneRow
+  pop hl
+  ld bc, 32
+  add hl, bc
+  pop bc
+  inc b
+.oneRow:
+  ld a, b
+.loop:
+  ld [hl+], a
+  inc a
+  inc a
+  dec c
+  jr nz, .loop
+  ret
+
+FIRST_GLYPH = $20
+
+;;
+; Each glyph begins with a pointer to the start of each glyph's data
+; stream, which consists of a sequence of vertical columns, where
+; each column has a 1-byte header (y << 4) | ht followed by
+; 2 * (ht + 1) bytes of 4x1-pixel slivers, and $FF terminates the
+; list of columns.
+; 10 per sliver, 23 per column, 33 for setup/teardown
+; @param A glyph
+; @param B X position (0-31)
+; @return B new X position
+Vwf16DrawGlyph::
+  ; Find glyph data
+  add a
+  add low(vwf4_glyphstarts - FIRST_GLYPH * 2)
+  ld l, a
+  adc high(vwf4_glyphstarts - FIRST_GLYPH * 2)
+  sub l
+  ld h, a
+  ld a, [hl+]
+  ld h, [hl]
+  ld l, a
+
+  ; Set destination address DE based on horizontal position
+.glyphColLoop:
+  push bc
+  ld a, b
+  and %00011110
+  add a
+  add a
+  add a
+  rrc b
+  adc a
+  ld e, a
+  adc high(wVWFRenderBuffer)
+  sub e
+  ld d, a
+
+  ; Seek to top of used part of strip
+  ld a, [hl]
+  rra
+  rra
+  rra
+  and %00011110
+  or e
+  ld e, a
+  ld a, [hl+]
+  and $0F
+  jr z, .glyphLastSliver
+  ld b, a
+.glyphSliverLoop:
+  ld a, [hl+]
+  ld [de], a
+  inc e
+  inc e
+  dec b
+  jr nz, .glyphSliverLoop
+.glyphLastSliver:
+  ld a, [hl+]
+  ld [de], a
+  pop bc
+  inc b
+
+  ; Is there another column?
+  ld a, [hl]
+  cp $F1
+  jr c, .glyphColLoop
+  ret
+
+Vwf16DrawStr::
+  ld a, [hl]
+  cp " "
+  ret c
+  inc hl
+  push hl
+  call Vwf16DrawGlyph
+  pop hl
+  jr Vwf16DrawStr

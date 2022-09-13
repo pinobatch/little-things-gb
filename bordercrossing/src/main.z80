@@ -1,0 +1,218 @@
+include "src/hardware.inc"
+
+section "HVARS", HRAM
+hInitialA: ds 1
+hCapability:: ds 1
+
+section "WVARS", WRAM0
+wStack: ds 64
+wStackEnd:
+help_line_buffer:: ds 32
+
+section "HEADER", ROM0[$100]
+  nop
+  jp reset
+  ds 76, $00
+
+section "RESET", ROM0
+reset:
+  di
+  xor $11
+  cp 1  ; CF set for GBC only
+  ld sp, wStackEnd
+  xor a
+  ldh [rBGP], a
+  ldh [rSCX], a
+  ldh [rIE], a
+  ldh [rSCY], a
+  ldh [rSTAT], a
+  ldh [cur_keys], a
+  ldh [hVblanks], a
+  rra
+  ldh [hCapability], a
+  ld a, $30
+  ldh [rP1], a
+  call lcd_off
+  ld hl, hramcode_start
+  ld de, run_dma
+  call memcpy_pascal16
+
+  ld b, 8
+  :
+    call sgb_wait
+    dec b
+    jr nz, :-
+  call detect_sgb
+
+  ldh a, [hCapability]
+  cp 1
+  jr z, is_sgb
+
+  ; Error message for not SGB
+  ld h, $7F
+  call clear_scrn0_to_h
+  ld hl, sgb_error_line
+  .lineloop:
+    push bc  ; [2]: starting tile ID
+    push hl  ; [0]: text
+    ; 1. Load tilemap and clear
+    ld de, $9800 + (2 + 4*32)
+    ld l, b
+    ld h, 0
+    add hl, hl
+    add hl, de
+    ld c, 16
+    call Vwf16SetTilemap
+    ; 2. Clear tilemap
+    call Vwf16Clear
+    ; 3. Draw one line of text
+    ld b, 0
+    pop hl
+    call Vwf16DrawStr
+    pop bc
+    push hl
+    push bc
+    call Vwf16ConvertToCHR
+    pop bc
+    push bc
+    ld h, $8000 >> 12
+    ld l, b
+    add hl, hl
+    add hl, hl
+    add hl, hl
+    add hl, hl
+    ld d, h
+    ld e, l
+    ld hl, wVWFRenderBuffer
+    ld bc, 512
+    call memcpy
+    pop bc
+    pop hl
+    ld a, b
+    add $20
+    ld b, a
+    ld a, [hl+]
+    or a
+    jr nz, .lineloop
+
+  ld a, %11100100
+  ldh [rBGP], a
+  ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8000
+  ldh [rLCDC], a
+  ei
+.loop:
+  halt
+  jr .loop
+
+
+
+is_sgb:
+  ld a, %11100100
+  ldh [rBGP], a
+  ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8000
+  ldh [rLCDC], a
+
+.loop:
+  jr .loop
+
+section "no sgb error txt", ROM0
+sgb_error_line:
+  db "Border Crossing", 10
+  db "requires the", 10
+  db "Super Game Boy", 10
+  db "accessory.",0
+
+
+; memcpy and friends ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+section "memset_tiny",ROM0[$08]
+;;
+; Writes C bytes of value A starting at HL.
+memset_tiny::
+  ld [hl+],a
+  dec c
+  jr nz,memset_tiny
+  ret
+
+section "memset_inc",ROM0
+;;
+; Writes C bytes of value A, A+1, ..., A+C-1 starting at HL.
+memset_inc::
+  ld [hl+],a
+  inc a
+  dec c
+  jr nz,memset_inc
+  ret
+
+section "memcpy", ROM0
+clear_scrn0_to_0::
+  ld h, 0
+clear_scrn0_to_h::
+  ld de,_SCRN0
+  ld bc,32*32
+  ; fall through to memset
+
+;;
+; Writes BC bytes of value H starting at DE.
+memset::
+  ; Increment B if C is nonzero
+  dec bc
+  inc b
+  inc c
+  ld a, h
+.loop:
+  ld [de],a
+  inc de
+  dec c
+  jr nz,.loop
+  dec b
+  jr nz,.loop
+  ret
+
+;;
+; Copy a string preceded by a 2-byte length from HL to DE.
+; @param HL source address
+; @param DE destination address
+memcpy_pascal16::
+  ld a, [hl+]
+  ld c, a
+  ld a, [hl+]
+  ld b, a
+  ; fall through to memcpy
+
+;;
+; Copies BC bytes from HL to DE.
+; @return A: last byte copied; HL at end of source;
+; DE at end of destination; B=C=0
+memcpy::
+  ; Increment B if C is nonzero
+  dec bc
+  inc b
+  inc c
+.loop:
+  ld a, [hl+]
+  ld [de],a
+  inc de
+  dec c
+  jr nz,.loop
+  dec b
+  jr nz,.loop
+  ret
+
+;;
+; The routine gets copied to high RAM.  While OAM DMA is running,
+; both ROM and WRAM are inaccessible; only HRAM is readable.
+; But unlike on the NES, the CPU continues to fetch and execute
+; instructions.  So a program needs to run 160 mcycles' worth of
+; code from HRAM until this finishes.  Thus to present a display
+; list, the program will call run_dma, not hramcode_start.
+hramcode_start:
+  dw hramcode_end-hramcode_start-2
+  ld a,SOAM >> 8
+  ldh [rDMA],a
+  ld a,40
+.loop:
+  dec a
+  jr nz,.loop
+  ret
+hramcode_end:
