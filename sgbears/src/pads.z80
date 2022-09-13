@@ -20,7 +20,7 @@
 ; 3. This notice may not be removed or altered from any source distribution.
 ;
 include "src/hardware.inc"
-include "src/global.inc"
+
 
 DAS_DELAY equ 15
 DAS_SPEED equ 3
@@ -68,7 +68,7 @@ read_pad::
 
   ; And release the controller
   ld a,P1F_GET_NONE
-  ld [rP1],a
+  ldh [rP1],a
 
   ; Combine with previous cur_keys to make new_keys
   ldh a,[cur_keys]

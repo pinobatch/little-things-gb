@@ -1,5 +1,4 @@
 include "src/hardware.inc"
-include "src/global.inc"
 
 ; Super Game Boy detection ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -144,9 +143,9 @@ sgb_send::
 
   ; Send $20 $30 as end of packet
   ld a,$20
-  ld [rP1],a
+  ldh [rP1],a
   ld a,$30
-  ld [rP1],a
+  ldh [rP1],a
 
   call sgb_wait
   dec c

@@ -90,6 +90,7 @@ wait_vblank_run_dma::
   jr run_dma
 wait_vblank_irq_tail:
   halt
+  nop
   cp [hl]
   jr z, wait_vblank_irq_tail
   ret

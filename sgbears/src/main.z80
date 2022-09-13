@@ -235,6 +235,7 @@ past_header:
 
   .forever
     halt
+    nop
     jr .forever
 
 ;;
@@ -463,9 +464,9 @@ popslide_1to2bpp::
   ld [popslide_sp_save],sp
 
   ld a, IEF_LCDC  ; set hblank as only interrupt that ends HALT
-  ld [rIE], a
+  ldh [rIE], a
   ld a, STATF_MODE00
-  ld [rSTAT], a
+  ldh [rSTAT], a
   ld sp, hl     ; set SP to the source address
   ld hl, rLCDC
   set 7, [hl]

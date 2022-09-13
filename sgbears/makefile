@@ -39,10 +39,10 @@ $(PB8): $(TOOLSDIR)/pb8.c
 # Game Boy program part #############################################
 
 obj/gb/%.o: src/%.z80 src/hardware.inc
-	rgbasm -o $@ $<
+	rgbasm -h -o $@ $<
 
 obj/gb/%.o: obj/gb/%.z80
-	rgbasm -o $@ $<
+	rgbasm -h -o $@ $<
 
 obj/gb/main.o: \
   obj/gb/sgb-playmate.1b obj/gb/menutiles.1b obj/gb/credit.1b.pb16
