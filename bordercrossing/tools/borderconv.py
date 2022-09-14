@@ -194,7 +194,7 @@ def main(argv=None):
             cramdata[addr + 1] = value >> 8
 
     out_parts = [
-        bytes([len(ctiles) % 256]),
+        bytes([len(tiles4b) - 1]), ctiles,
         ctilemap,
         cramdata
     ]

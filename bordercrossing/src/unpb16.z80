@@ -18,13 +18,11 @@
 ;    misrepresented as being the original software.
 ; 3. This notice may not be removed or altered from any source distribution.
 ;
-include "src/global.inc"
+
 CHRRAM0 equ $8000
-CHRRAM2 equ $9000
 
-
-  rsset hLocals
-pb16_byte0 rb 1
+section "pb16temp", HRAM
+pb16_byte0: ds 1
 
 section "pb16", ROM0
 
