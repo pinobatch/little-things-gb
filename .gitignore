@@ -18,6 +18,7 @@
 */obj/gg/*.pal
 */obj/gb/*.pal
 */obj/gb/*.z80
+*/obj/gb/*.border
 __pycache__
 zip.in
 ca83/tools/pb8
