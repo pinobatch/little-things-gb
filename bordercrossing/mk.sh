@@ -15,6 +15,8 @@ tools/borderconv.py tilesets/classic_mac.png obj/gb/classic_mac.border
 tools/borderconv.py tilesets/canada.png obj/gb/canada.border
 tools/borderconv.py tilesets/mexico.png obj/gb/mexico.border
 tools/borderconv.py tilesets/Ross_by_Yoey.png obj/gb/Ross_by_Yoey.border
+tools/borderconv.py tilesets/Windows31.png obj/gb/Windows31.border
+tools/borderconv.py tilesets/Windows98.png obj/gb/Windows98.border
 
 rgbasm -o obj/gb/fink.o obj/gb/fink.z80
 rgbasm -h -o obj/gb/main.o src/main.z80
@@ -26,5 +28,6 @@ rgbasm -h -o obj/gb/pads.o src/pads.z80
 rgbasm -h -o obj/gb/ppuclear.o src/ppuclear.z80
 rgbasm -h -o obj/gb/vwf4w.o src/vwf4w.z80
 rgbasm -h -o obj/gb/unpb16.o src/unpb16.z80
-rgblink -o bordercrossing.gb -n bordercrossing.sym -m bordercrossing.map -d obj/gb/main.o obj/gb/title.o obj/gb/listpicker.o obj/gb/pakswap.o obj/gb/fink.o obj/gb/sgb.o obj/gb/pads.o obj/gb/ppuclear.o obj/gb/vwf4w.o obj/gb/unpb16.o
+rgbasm -h -o obj/gb/popslide.o src/popslide.z80
+rgblink -o bordercrossing.gb -n bordercrossing.sym -m bordercrossing.map -d obj/gb/main.o obj/gb/title.o obj/gb/listpicker.o obj/gb/pakswap.o obj/gb/fink.o obj/gb/sgb.o obj/gb/pads.o obj/gb/ppuclear.o obj/gb/vwf4w.o obj/gb/unpb16.o obj/gb/popslide.o
 rgbfix -jsv -k P8 -l 0x33 -m MBC5 -p 0xFF -r 0 -t "BORDER CROSSING" bordercrossing.gb

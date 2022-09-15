@@ -3,12 +3,14 @@ include "src/hardware.inc"
 ; debug: show where canvas is not yet replaced
 SHOW_UNINITED_CANVAS equ 0
 PAGE_MAX_HEIGHT equ 7
+PAGE_LR_AMOUNT equ PAGE_MAX_HEIGHT - 1
 
 section "teststate", WRAM0
 wCursorY::    ds 1
 wCursorPage:: ds 1
+wBorderCount: ds 1
 wDrawY:       ds 1
-wPageHeight:  ds 1
+wPopslideSPSave: ds 2
 
 section "List picker", ROM0
 cls_set_title::
@@ -38,13 +40,16 @@ cls_set_title::
   ; Clear sprite positions
   xor a
   ld [wDrawY], a
-  ld [wPageHeight], a
   ld hl, _OAMRAM
   ld c, 160
   rst memset_tiny
   ld hl, SOAM
   ld c, 160
   rst memset_tiny
+  ld hl, cursor_sprite_tile
+  ld de, $8000
+  ld bc, 16
+  call memcpy
 
   ; Draw title
   call Vwf16Clear
@@ -62,7 +67,7 @@ cls_set_title::
   call Vwf16SetTilemap
   ld hl, wVWFRenderBuffer
   ld de, $8600
-  ld bc, $01F0
+  ld bc, $0200
   jp memcpy
 
 listpicker::
@@ -86,9 +91,9 @@ listpicker::
     bit 1, h  ; reached 9A00
     jr z, .initcanvasloop
 
-  ; Draw bottom border
+  ; Draw status bar
   call Vwf16Clear
-  ld b, 0
+  ld b, 1
   ld hl, listpicker_status_msg
   call Vwf16DrawStr
   call Vwf16Invert
@@ -101,10 +106,28 @@ listpicker::
   ld bc, $0140
   call memcpy
 
-  ; TODO: Load cursor sprite
+  ; Count borders
+  xor a
+  call border_list_seek_a
+  ld b, 0
+  .counting_loop:
+    inc hl
+    ld a, [hl+]
+    inc hl
+    inc hl
+    inc hl
+    add a
+    jr c, .have_border_count
+    inc b
+    jr nz, .counting_loop
+    dec b
+  .have_border_count:
+  ld a, b
+  ld [wBorderCount], a
 
   ld a, %11100100
   ldh [rBGP], a
+  ldh [rOBP0], a
   ld a, IEF_VBLANK
   ldh [rIE], a
   ld a, [hCapability]
@@ -123,12 +146,34 @@ listpicker::
   ld a, LCDCF_ON|LCDCF_BGON|LCDCF_OBJON|LCDCF_BG8800
   ldh [rLCDC], a
 
-  ; TODO: Move cursor
+  call listpicker_input
 
-  ; TODO: Draw one title
+  ; Draw one title
+  ld hl, wDrawY
+  ld a, [hl]
+  cp PAGE_MAX_HEIGHT
+  jr nc, .dont_draw_a_title
+    ld b, a
+    inc [hl]
+    ld a, [wCursorPage]
+    add b
+    call listpicker_draw_a_at_b
+  .dont_draw_a_title:
+
+  ; Draw sprite
+  ld hl, SOAM
+  ld a, [wCursorY]
+  swap a  ; A = Y*16
+  add 16 + 16 + 2
+  ld [hl+], a  ; Y position
+  ld a, 8 + 8
+  ld [hl+], a  ; X position
+  xor a
+  ld [hl+], a  ; tile number
+  ld [hl+], a  ; attribute
 
   ; Wait for vblank
-  call wait_vblank_irq
+  rst wait_vblank_run_dma
   ld a, LCDCF_ON|LCDCF_BGON|LCDCF_OBJON|LCDCF_BG8000
   ldh [rLCDC], a
   ; TODO: do other tasks using vblank time
@@ -138,9 +183,176 @@ listpicker::
   ldh a, [hNewKeys]
   and PADF_START|PADF_A
   jr z, .loop
+
+  ; Input handling
+  ld hl, wCursorY
+  ld a, [hl+]
+  add [hl]
   ret
 
+;
+listpicker_input:
+  ; Move cursor
+  ld b, PADF_UP|PADF_DOWN
+  call autorepeat
+  ldh a, [hNewKeys]
+  ld b, a      ; B = keys pressed
+  ld hl, wCursorY
+  ld a, [hl+]
+  ld c, a      ; C = cursor Y
+  ld a, [hl+]
+  ld d, a      ; D = start of page
+  ld a, [hl]
+  sub d        ; A = number of entries following start of page
+  cp PAGE_MAX_HEIGHT
+  jr c, :+
+    ld a, PAGE_MAX_HEIGHT
+  :
+  ld e, a      ; E = page height
+
+  bit PADB_UP, b
+  jr z, .not_up
+    ld a, c
+    or a
+    jr nz, .cursor_y_aminus1
+    ; At top?  Move to the left by one page then redraw
+    ld a, d
+    cp PAGE_LR_AMOUNT
+    jr nc, :+
+      ld a, PAGE_LR_AMOUNT
+    :
+    dec a
+    ld c, a
+    jr .do_left
+  .not_up:
+
+  bit PADB_DOWN, b
+  jr z, .not_down
+    inc c
+    ld a, c
+    cp e
+    jr c, .not_down
+    ; At bottom? Go to second line of next page
+    ld c, 1
+    jr .do_right
+  .not_down:
+  
+  bit PADB_LEFT, b
+  jr z, .not_left
+    ; Left: page up if possible or go to top if not
+    .do_left:
+    ld a, d
+    or a
+    jr z, .lr_have_cursor_y
+    sub PAGE_LR_AMOUNT
+    jr nc, :+
+      xor a
+    :
+    ld d, a
+    jr .schedule_redraw
+  .not_left:
+
+  bit PADB_RIGHT, b
+  jr z, .no_move_lr
+    ; Right: page down if possible or go to bottom if not
+    .do_right:
+    ld a, e
+    cp PAGE_MAX_HEIGHT
+    jr nc, .right_next_page  ; if no next page, move to end of page
+    .cursor_y_aminus1
+      dec a
+    .lr_have_cursor_y:
+      ld c, a
+      jr .no_move_lr
+    .right_next_page:
+    ld a, d
+    add PAGE_LR_AMOUNT
+    ld d, a
+  .schedule_redraw:
+    ld a, d
+    ld [wCursorPage], a
+    xor a
+    ld [wDrawY], a
+  .no_move_lr:
+
+  ; clamp cursor to the end
+  ld b, b
+  ld hl, wBorderCount
+  ld a, d
+  add c
+  cp [hl]  ; border count
+  jr c, :+
+    ld a, [hl]
+    sub d
+    dec a
+    ld c, a
+  :
+
+  ld a, c
+  ld [wCursorY], a
+  ret
+
+;;
+; Points HL at border list entry A and switches to the bank
+; containing border lists
+; @return ABC unchanged; ROMB0 = 1; HL points at a border list entry
+border_list_seek_a::
+  ld hl, rROMB0
+  ld [hl], 1
+  ld h, 0
+  ld d, h
+  ld l, a
+  ld e, a     ; HL = DE = i
+  add hl, hl  ; HL = i * 2
+  add hl, hl  ; HL = i * 4
+  add hl, de  ; HL = i * 5
+  ld de, border_list
+  add hl, de  ; HL = border_list + i * 5
+  ret
+
+;;
+; Draws border A's name at row B
+listpicker_draw_a_at_b:
+  ld hl, wBorderCount
+  cp [hl]
+  jr c, .count_in_range
+    ld hl, .nul_minus_1
+    jr .have_title_in_hl
+  .count_in_range:
+    call border_list_seek_a
+    ld a, [hl+]
+    ld h, [hl]
+    ld l, a  ; HL = name of border
+  .have_title_in_hl:
+  push bc
+  push hl
+  call Vwf16Clear
+  pop hl
+  call Vwf16DrawStr
+  call Vwf16ConvertToCHR
+  pop bc
+  ; DE = B * 512 + $8800
+.nul_minus_1:
+  ld e, 0
+  ld a, b
+  add a
+  add high($8800)
+  ld d, a
+  ld hl, wVWFRenderBuffer
+  ld c, 512/8
+  jp popslide_hblank_copy
+
 listpicker_status_msg: db "A: Preview", 0
+
+cursor_sprite_tile:
+  dw `00033000
+  dw `00031300
+  dw `33331130
+  dw `31111113
+  dw `31111113
+  dw `33331130
+  dw `00031300
+  dw `00033000
 
 ; Hardcoded bank number caution:
 ; Border list is at the very start of ROMX[1], so that the
@@ -167,13 +379,23 @@ border_list:
   dw border4
   db bank(border4)
 
+  dw border5_name
+  dw border5
+  db bank(border5)
+
+  dw border6_name
+  dw border6
+  db bank(border6)
+
   dw $FFFF
 
 border0_name: db "Canada",0
 border1_name: db "Classic Mac OS",0
 border2_name: db "macOS Big Sur",0
 border3_name: db "Mexico",0
-border4_name: db "Ross by Yoey",0
+border4_name: db "Redmond 3.1",0
+border5_name: db "Redmond 98",0
+border6_name: db "Ross by Yoey",0
 
 ; The remainder of all banks can go anywhere
 section "Border0", ROMX
@@ -185,4 +407,8 @@ border2: incbin "obj/gb/sameboy.border"
 section "Border3", ROMX
 border3: incbin "obj/gb/mexico.border"
 section "Border4", ROMX
-border4: incbin "obj/gb/Ross_by_Yoey.border"
+border4: incbin "obj/gb/Windows31.border"
+section "Border5", ROMX
+border5: incbin "obj/gb/Windows98.border"
+section "Border6", ROMX
+border6: incbin "obj/gb/Ross_by_Yoey.border"

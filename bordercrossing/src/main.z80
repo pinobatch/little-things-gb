@@ -36,8 +36,8 @@ reset:
   ld a, $30
   ldh [rP1], a
   call lcd_off
-  ld hl, hramcode_start
-  ld de, run_dma
+  ld hl, hramcode_LOAD
+  ld de, hramcode_RUN
   call memcpy_pascal16
 
   ld b, 8
@@ -64,6 +64,20 @@ is_sgb:
 
 .listloop:
   call listpicker
+
+  ; Send the chosen border
+  call border_list_seek_a
+  inc hl
+  inc hl
+  ld a, [hl+]
+  ld c, a
+  ld a, [hl+]
+  ld b, a
+  ld a, [hl+]
+  ld [rROMB0], a
+  ld l, c
+  ld h, b
+  call sgb_send_border
 
   call lcd_off
   ld h, $7F
@@ -116,10 +130,7 @@ program_name::
   db "accessory.",0
 sgb_ok_msg:
   db "Coming soon:", 10
-  db "Choose a border", 10
-  db "from a list, send", 10
-  db "it to SGB, then", 10
-  db "swap to a game.",0
+  db "Swap to a game",0
 
 ; memcpy and friends ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -203,18 +214,25 @@ section "HRAMCODE_src", ROM0
 ; both ROM and WRAM are inaccessible; only HRAM is readable.
 ; But unlike on the NES, the CPU continues to fetch and execute
 ; instructions.  So a program needs to run 160 mcycles' worth of
-; code from HRAM until this finishes.  Thus to present a display
-; list, the program will call run_dma, not hramcode_start.
-hramcode_start:
-  dw hramcode_end-hramcode_start-2
+; code from HRAM until this finishes.  To present a display list,
+; the program calls run_dma.
+hramcode_LOAD:
+  dw hramcode_RUN_end-hramcode_RUN
+load "HRAMCODE", HRAM
+hramcode_RUN:
+
+run_dma::
   ld a,SOAM >> 8
   ldh [rDMA],a
+hram_wait160::
   ld a,40
 .loop:
   dec a
   jr nz,.loop
   ret
-hramcode_end:
+
+hramcode_RUN_end:
+endl
 
 section "borderdata", ROM0
 bootborder: incbin "obj/gb/bootborder.border"

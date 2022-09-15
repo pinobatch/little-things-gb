@@ -1,0 +1,96 @@
+; Hblank bulk copy
+; for copying bulk data (circa 1K per frame) without needing to
+; disable rendering
+include "src/hardware.inc"
+
+section "bulk_copy_vars", WRAM0
+wSpSave: ds 2
+
+section "bulk_copy", ROM0
+;;
+; Copies bulk data during horizontal blanking periods,
+; disabling interrupts for the duration.
+;
+; DMG scanline is 456 dots, of which 80 are OAM scan, 176 plus
+; window plus sprites are draw, and the rest is hblank.
+; Sprites are 6-11 dots each depending on relative alignment with
+; the background, and exact alignment with a background tile is
+; slowest.  Window is about 6 dots if enabled on a scanline.
+; This leaves at least 84 dots, or 21 cycles at 4 cycles per dot.
+; We can write to VRAM during the 21+ cycles of hblank plus the
+; 20 cycles of the following line's OAM scan.
+;
+; Uses DI HALT; may malfunction on VisualBoyAdvance 1.x.
+; @param HL source address (usually ROM or WRAM)
+; @param DE destination address (usually VRAM)
+; @param C number of 8-byte units to copy (usually 1 to 128)
+; @return C = 0; IME on
+popslide_hblank_copy::
+  ; Save which interrupts were enabled and the old stack pointer
+  di
+  ldh a, [rIE]
+  push af
+  ldh a, [rSTAT]
+  push af
+  ld [wSpSave],sp
+
+  ; Set hblank as only interrupt that ends HALT
+  ld a, IEF_LCDC
+  ldh [rIE], a
+  ld a, STATF_MODE00
+  ldh [rSTAT], a
+
+  ; Point the stack at the source
+  ld sp,hl
+  ld hl, rLCDC
+  set 7, [hl]
+  ld h,d
+  ld l,e
+
+.rowloop:
+  xor a
+  ldh [rIF], a
+
+  ; Read first four bytes into A, B, E, D before hblank
+  pop de
+  ld b, d
+  ld a, e
+  pop de
+  halt
+  nop
+
+  ; Write four already-popped bytes (14 cycles)
+  ld [hl+], a
+  ld a, b
+  ld [hl+], a
+  ld a, e
+  ld [hl+], a
+  ld a, d
+  ld [hl+], a
+
+  ; Pop and write next four bytes (18 cycles)
+  pop de
+  ld a, e
+  ld [hl+], a
+  ld a, d
+  ld [hl+], a
+  pop de
+  ld a, e
+  ld [hl+], a
+  ld a, d
+  ld [hl+], a
+
+  dec c
+  jr nz, .rowloop
+
+  ; Restore the stack and interrupt settings
+  ; Optimization thanks to NieDzejkob in gbdev
+  ld sp, wSpSave
+  pop hl
+  ld sp, hl
+
+  pop af
+  ldh [rSTAT], a
+  pop af
+  ldh [rIE],a
+  reti

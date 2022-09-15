@@ -25,9 +25,6 @@ section "irqvars",HRAM
 ; Used for bankswitching BG CHR RAM
 hVblanks:: ds 1
 
-section "hDMACode", HRAM[$FFF4]
-run_dma::      ds 10
-
 ; Shadow OAM is a display list that gets copied using DMA to OAM
 ; after every frame in which sprites moved.
 section "ram_ppuclear",WRAM0,ALIGN[8]
@@ -87,7 +84,7 @@ wait_vblank_irq::
 section "wait_vblank_run_dma", ROM0[$18]
 wait_vblank_run_dma::
   rst wait_vblank_irq
-  jr run_dma
+  jp run_dma
 wait_vblank_irq_tail:
   halt
   nop
