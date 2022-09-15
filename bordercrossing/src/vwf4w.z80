@@ -40,10 +40,10 @@ Vwf16Invert::
   ld hl, wVWFRenderBuffer
   ld b, l
 .loop:
-  ld a, [hl+]
+  ld a, [hl]
   cpl
   ld [hl+], a
-  ld a, [hl+]
+  ld a, [hl]
   cpl
   ld [hl+], a
   dec b
@@ -68,6 +68,7 @@ Vwf16Clear::
 ; @param B starting tile ID in canvas
 ; @param C width in tiles
 ; @param HL destination in tilemap space ($9800-$9FFF)
+; DE not modified
 Vwf16SetTilemap::
   push bc
   push hl
@@ -98,7 +99,7 @@ FIRST_GLYPH = $20
 ; 10 per sliver, 23 per column, 33 for setup/teardown
 ; @param A glyph
 ; @param B X position (0-31)
-; @return B new X position
+; @return B: new X position
 Vwf16DrawGlyph::
   ; Find glyph data
   add a
@@ -157,6 +158,11 @@ Vwf16DrawGlyph::
   jr c, .glyphColLoop
   ret
 
+;;
+; Draws an ASCII string as glyphs.
+; @param HL pointer to string terminated by <$20
+; @param B X position (0-31)
+; @return B: new X position; HL: pointer to terminator
 Vwf16DrawStr::
   ld a, [hl]
   cp " "
@@ -166,3 +172,84 @@ Vwf16DrawStr::
   call Vwf16DrawGlyph
   pop hl
   jr Vwf16DrawStr
+
+;;
+; Draws a VWF string to the tileset and tilemap.
+; @param HL the <$20-termintaed string
+; @param DE tilemap address
+; @param A starting tile number to use
+; @return A: ending tile number, C: width in tiles; HL: end of string
+Vwf16DrawStrAt::
+  push af
+  push de
+  push hl
+  call Vwf16Clear
+  ld b, 0
+  pop hl
+  call Vwf16DrawStr
+  ld a, b
+  or a
+  jr nz, .not_zero_width
+    ld c, a
+    pop de
+    pop af
+    ret
+  .not_zero_width:
+  push bc
+  push hl
+  call Vwf16ConvertToCHR
+  pop hl
+  pop bc
+  pop de
+  pop af
+  push hl
+  ; at this point:
+  ; B = width in half tiles
+  ; DE = tilemap destination
+  ; A = tile number
+  ; Top of stack = end of text
+  inc b
+  srl b
+  ld c, b
+  ld b, a
+  ; B = tile id, C = width in full tiles
+  push bc
+  ld h, d
+  ld l, e
+  call Vwf16SetTilemap
+  pop bc
+  push bc
+
+  ; destination = 9000-97F0 or 8800-8FF0
+  ld l, b
+  ld a, l
+  cp $80  ; CF = not bit 7
+  ld a, $8000 >> 13
+  adc a   ; A = 9 or 8
+  ld h, a
+  add hl, hl
+  add hl, hl
+  add hl, hl
+  add hl, hl
+  ld d, h
+  ld e, l
+
+  ; byte count = B << 5
+  ld a, c
+  rrca
+  rrca
+  rrca
+  ld c, a
+  and %00011111
+  ld b, a
+  xor c
+  ld c, a
+  ld hl, wVWFRenderBuffer
+  call memcpy
+  
+  pop bc
+  ld a, b
+  add c
+  add c
+  pop hl
+  ret

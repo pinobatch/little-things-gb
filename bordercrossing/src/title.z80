@@ -1,1 +1,64 @@
 include "src/hardware.inc"
+
+section "TITLE", ROM0
+
+show_title_screen::
+  call lcd_off
+  
+  ld h, $80
+  call clear_scrn0_to_h
+  ld hl, $8800
+  ld a, l
+  ld c, 16
+  call memset_tiny
+
+  ; Draw the title
+  ld a, $82
+  ld hl, program_name
+  ld de, $9800 + 32 * 1 + 3
+  call Vwf16DrawStrAt
+  ld hl, press_start_msg
+  ld de, $9800 + 32 * 13 + 5
+  call Vwf16DrawStrAt
+  ld hl, copr_msg_1
+  ld de, $9800 + 32 * 16 + 0
+  call Vwf16DrawStrAt
+  ld hl, copr_msg_2
+  ld de, $9800 + 32 * 16 + 6
+  call Vwf16DrawStrAt
+
+  ; Load the pic
+  ld de, title_chr
+  ld hl, $9000
+  ld b, 720/16
+  call pb16_unpack_block
+  
+  ld bc, $1208  ; size
+  ld hl, title_nam
+  ld de, $9800 + 32 * 4 + 1
+  call load_nam
+
+  ld a, %11100100
+  ldh [rBGP], a
+  ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8800
+  ldh [rLCDC], a
+  ld a, IEF_VBLANK
+  ldh [rIE], a
+  ld a, [hCapability]
+  rra
+  call c, sgb_unfreeze
+  ei
+.loop:
+  call wait_vblank_irq
+  call read_pad
+  ldh a, [hNewKeys]
+  and PADF_A|PADF_START
+  jr z, .loop
+  ret
+
+press_start_msg: db "Press Start", 0
+copr_msg_1: db " ", 127, " 2022", 0
+copr_msg_2: db " Damian Yerrick", 0
+
+title_chr: incbin "obj/gb/titlepic.2bpp.pb16"
+title_nam: incbin "obj/gb/titlepic.nam"

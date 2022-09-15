@@ -1,0 +1,17 @@
+Eevee Dex.png
+
+The play area (center 160x144 pixels) is a screenshot of a Pokémon
+video game, consisting of an illustration of a monster, its
+description, and the ornamentation of the "Pokédex" interface
+through which the player views it.  The remainder is the border,
+which illustrates the lens piece of a handheld video game console.
+
+Border by Damian Yerrick
+No rights reserved.  The author hereby waives exclusive rights (such
+as copyright and related or neighboring rights) in this work to the
+extent allowed by law.  You have permission to reproduce, modify,
+distribute, and display the work for any purpose.
+
+Play area: Copyright Nintendo/Creatures/Game Freak
+We claim fair use to illustrate what a notable Game Boy game looks like.
+This claim may not necessarily apply to your use.

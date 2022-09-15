@@ -4,6 +4,9 @@ set -e
 mkdir -p obj/gb
 tools/vwf4cv.py -o obj/gb/fink.z80 -W12 -H16 tilesets/fink.png
 tools/pilbmp2nes.py --planes "0,1" -H16 tilesets/finkmono.png obj/gb/finkmono.2bpp
+tools/pb16.py obj/gb/finkmono.2bpp obj/gb/finkmono.2bpp.pb16
+rgbgfx -u -d 2 -t obj/gb/titlepic.nam -o obj/gb/titlepic.2bpp tilesets/titlepic.png
+tools/pb16.py obj/gb/titlepic.2bpp obj/gb/titlepic.2bpp.pb16
 tools/borderconv.py tilesets/bootborder.png obj/gb/bootborder.border
 
 # user borders
