@@ -51,17 +51,28 @@ reset:
   ; Error message for not SGB
   ld h, $7F
   call clear_scrn0_to_h
-  ld hl, sgb_error_line
+  ld hl, sgb_error_msg
+  jr four_lines_and_halt
+
+is_sgb:
+  ld hl, bootborder
+  call sgb_send_border
+  ld h, $7F
+  call clear_scrn0_to_h
+  ld hl, sgb_ok_msg
+  jr four_lines_and_halt
+
+four_lines_and_halt:
   .lineloop:
     push bc  ; [2]: starting tile ID
     push hl  ; [0]: text
     ; 1. Load tilemap and clear
-    ld de, $9800 + (3 + 4*32)
+    ld de, $9800 + (2 + 4*32)
     ld l, b
     ld h, 0
     add hl, hl
     add hl, de
-    ld c, 14
+    ld c, 16
     call Vwf16SetTilemap
     ; 2. Clear tilemap
     call Vwf16Clear
@@ -84,7 +95,7 @@ reset:
     ld d, h
     ld e, l
     ld hl, wVWFRenderBuffer
-    ld bc, 14*32
+    ld bc, 16*32
     call memcpy
     pop bc
     pop hl
@@ -99,29 +110,27 @@ reset:
   ldh [rBGP], a
   ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8000
   ldh [rLCDC], a
+  ld a, [hCapability]
+  rra
+  call c, sgb_unfreeze
   ei
 .loop:
   halt
   jr .loop
 
-is_sgb:
-  ld hl, sameboy_border
-  call sgb_send_border
-  ld a, %11100100
-  ldh [rBGP], a
-  ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8000
-  ldh [rLCDC], a
-  call sgb_unfreeze
 
-.loop:
-  jr .loop
 
 section "no sgb error txt", ROM0
-sgb_error_line:
+sgb_error_msg:
   db "Border Crossing", 10
   db "requires the", 10
   db "Super Game Boy", 10
   db "accessory.",0
+sgb_ok_msg:
+  db "Coming soon:", 10
+  db "Border Crossing", 10
+  db "load a border then", 10
+  db "swap to a game",0
 
 
 ; memcpy and friends ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -220,4 +229,4 @@ hramcode_start:
 hramcode_end:
 
 section "borderdata", ROM0
-sameboy_border: incbin "obj/gb/sameboy.border"
+bootborder: incbin "obj/gb/bootborder.border"
