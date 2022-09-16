@@ -164,8 +164,14 @@ pakswap_wram_RUN:
 
 rom_header_title equ $0134
 SIZEOF_HEADER_TITLE equ 15
+SIZEOF_SGB_PACKET equ 16
 rom_gbc_flag equ $0143  ; >$80: GBC
 rom_sgb_flag equ $0146  ; $03: SGB
+
+wSGBDisablePacket:
+  db $0E << 3 | 1  ; ICON_EN
+  db %100  ; bit 2: ignore SGB from here on out
+  ds wSGBDisablePacket-@+SIZEOF_SGB_PACKET, 0
 
 wait_for_pakswap_wram:
   ; throbber
@@ -213,6 +219,14 @@ wait_for_pakswap_wram:
       dec b
       jr nz, :-
 
+    ; Tell Super Game Boy to ignore further packets so that the
+    ; inserted game cannot overwrite the border.  Call this after yank.
+    ld hl, wSGBDisablePacket
+    ld a, [hl]
+    or a
+    call nz, pakswap_sgb_send  ; Don't call if already called
+    xor a
+    ld [wSGBDisablePacket], a
     ret
 
   .is_inserted:
@@ -250,13 +264,10 @@ wait_for_pakswap_wram:
       dec b
       jr nz, .namepad
     .namenopad:
-    
-    
 
     ; Display the platform (GB, SGB, GBC, GBC only)
     ; of the inserted cartridge
     ld a, [rom_gbc_flag]
-    ld b, b
     swap a
     and $0C
     cp $0C  ; GBC-only ($C0) overrides others
@@ -313,6 +324,49 @@ pakswap_handle_exit:
   ld sp, $FFFE
   ld a, 1
   jp $0100
+
+;;
+; Sends ONE Super Game Boy packet starting at HL.
+; @return HL first byte after end of last packet
+pakswap_sgb_send:
+
+  ; Start transfer by briefly asserting both halves of the key matrix
+  xor a
+  ldh [rP1],a
+  ld a,$30
+  ldh [rP1],a
+  ld b,SIZEOF_SGB_PACKET
+.byteloop:
+  ld a,[hl+]  ; Read a byte from the packet
+
+  ; Put bit 0 in CF and the rest (and a 1) into D.  Once this 1
+  ; is shifted out of D, D is 0 and the byte is finished.
+  scf      ; A = hgfedcba, CF = 1
+  rra      ; A = 1hgfedcb, CF = a
+  ld d,a
+.bitloop:
+  ; 1 is $10 $30; 0 is $20 $30
+  ld a,$10
+  jr c, .bitIs1
+    add a,a
+  .bitIs1:
+  ldh [rP1],a
+  ld a,$30
+  ldh [rP1],a
+
+  ldh a, [rIE]  ; burn 3 cycles so the ICD2 can keep up
+
+  srl d  ; Send bits until all bits have been shifted out of D
+  jr nz,.bitloop
+  dec b
+  jr nz,.byteloop
+
+  ; Send $20 $30 as end of packet
+  ld a,$20
+  ldh [rP1],a
+  ld a,$30
+  ldh [rP1],a
+  ret
 
 pakswap_wram_RUN_end:
 endl
