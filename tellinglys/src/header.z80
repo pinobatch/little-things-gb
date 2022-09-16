@@ -74,8 +74,7 @@ SECTION "header", ROM0[$0100]
   db $6E,$0E,$EC,$CC,$DD,$DC,$99,$9F,$BB,$B9,$33,$3E  ; endo
 
   ; 11-character title
-  DB "FIRSTWHITE"
-  DB 0
+  DB "TELLING LYS"
 
   ; Serial code (is ADME Doom or Animal Crossing?)
   DS 4

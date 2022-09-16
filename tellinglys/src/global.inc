@@ -1,5 +1,5 @@
   IF  !DEF(GB_INC)
-GB_INC SET 1
+GB_INC equ 1
 
 ; things left out of hardware.inc ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -15,13 +15,6 @@ SGB_NONE EQU $00
 SGB_SUPPORT EQU $03
 REGION_J EQU $00
 REGION_UE EQU $01
-
-;;
-; Syntax: drgb $FF9966 for color #FF9966
-; Divides each hex tuplet by 8 and rounds down. 
-drgb: macro
-  dw (\1 & $F80000) >> 19 | (\1 & $00F800) >> 6 | (\1 & $0000F8) << 7
-  endm
 
 ; global constants and the like ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -216,7 +216,7 @@ joypad_handler::
   jr z,.save_this_key
   .reenable_listening:
     xor a
-    ld [rP1],a  ; restore listen-for-everything state
+    ldh [rP1],a  ; restore listen-for-everything state
     jr .no_save
   .save_this_key:
     ; Save this key as being pressed
@@ -237,7 +237,7 @@ joypad_handler::
 
 setup_joypad_handler_if_no_keys:
   ; If already set up, don't set up
-  ld a,[rIE]
+  ldh a,[rIE]
   and IEF_HILO
   ret nz
 
@@ -377,6 +377,7 @@ freeze:
   ldh [rLCDC],a
 .forever:
   halt
+  nop
   jr .forever
 
 ;;

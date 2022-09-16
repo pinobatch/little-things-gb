@@ -15,9 +15,7 @@ version:=0.02
 
 # Space-separated list of asm files without .z80 extension
 # (use a backslash to continue on the next line)
-objlist := header init \
-  main \
-  ppuclear unpb16
+objlist := header init main ppuclear unpb16
 
 # To override the emulator:
 # GBEMU=mgba-qt make
@@ -73,14 +71,11 @@ $(title).gb: $(objlisto)
 	rgblink -p 0xFF -m$(title).map -n$(title).sym -o$@ $^
 	rgbfix -p 0xFF -v $@
 
-obj/gb/%.o: obj/gb/%-dedent.z80 src/hardware.inc src/global.inc
-	rgbasm -o $@ $<
+obj/gb/%.o: src/%.z80 src/hardware.inc src/global.inc
+	rgbasm -h -o $@ $<
 
 obj/gb/%.o: obj/gb/%.z80
-	rgbasm -o $@ $<
-
-obj/gb/%-dedent.z80: src/%.z80
-	$(PY) tools/bgrdedent.py -o $@ $<
+	rgbasm -h -o $@ $<
 
 # Files that will be included with incbin
 

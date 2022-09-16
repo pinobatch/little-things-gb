@@ -23,7 +23,6 @@ include "src/hardware.inc"
 include "src/global.inc"
 
 USE_NAM equ 1
-USE_GBC equ 0
 GBMONO_GREEN equ 0
 
 section "irqvars",HRAM
@@ -72,6 +71,7 @@ wait_vblank_irq::
   ld a,[hl]
 .loop:
   halt
+  nop
   cp [hl]
   jr z,.loop
   ret
@@ -179,117 +179,5 @@ load_nam::
   dec c
   jr nz,load_nam
   ret
-
-endc
-
-if USE_GBC
-
-;;
-; Emulates mono palette feature on Game Boy Color.
-; Call this only during blanking.
-set_obp1::
-  ldh [rOBP1],a
-  ld bc,$8800 + low(rOCPS)
-  jr set_gbc_mono_palette
-
-;;
-; Emulates mono palette feature on Game Boy Color.
-; Call this only during blanking.
-set_obp0::
-  ldh [rOBP0],a
-  ld bc,$8000 + low(rOCPS)
-  jr set_gbc_mono_palette
-
-;;
-; Emulates mono palette feature on Game Boy Color.
-; Call this only during blanking.
-set_bgp::
-  ldh [rBGP],a
-  ld bc,$8000 + low(rBCPS)
-
-;;
-; Emulates mono palette setting on Game Boy Color.
-; @param A BGP or OBP0 value
-; @param B offset into palette memory (0, 8, 16, ..., 56) plus $80
-; @param C palette port to write: LOW(rBCPS) or LOW(rOCPS)
-; @return AEHL clobbered, B=0, C increased by 1, D unchanged
-set_gbc_mono_palette::
-  rlca
-  ld e,a
-  ld a,b  ; Regmap now: E=BGP<<1, A=palette offset, C=address port
-  ld [$FF00+c],a
-  inc c   ; ad
-  ld b,4
-  ld h,high(gbmonopalette)
-  ; Regmap now: B=count of remaining colors, C=data port address,
-  ;   E=BGP value rlc 1, HL=pointer to start of palette
-  loop:
-    ld a,e
-    and %00000110
-    or low(gbmonopalette)
-    ld l,a  ; now L points to this color so stuff it into the palette
-    ld a,[hl+]
-    ld [$FF00+c],a
-    ld a,[hl-]
-    ld [$FF00+c],a
-    rrc e  ; move to next bitfield of BGP
-    rrc e
-    dec b
-    jr nz,loop
-
-  ; Restore BGP value
-  ld a,e
-  rrca
-  ret
-
-;;
-; Loads native GBC palette data.
-; @param A offset into palette memory (0, 8, 16, ..., 56) plus $80
-; @param B number of bytes to copy: 8 times number of subpalettes
-; @param C palette port to write: LOW(rBCPS) or LOW(rOCPS)
-; @param HL data source
-; @return HL at end, C increased by 1, B = 0, DE unchanged
-set_gbc_palette::
-  ld [$FF00+c],a
-  inc c
-  .loop:
-    ld a,[hl+]
-    ld [$FF00+c],a
-    dec b
-    jr nz,.loop
-  ret
-
-;;
-; Turns off rendering, marks help page as needing to be reloaded,
-; and clears the attribute plane of the GBC tilemaps.
-; @return A=0
-clear_gbc_attr::
-  call lcd_off
-  ld a,[initial_a]
-  cp $11
-  jr nz,.not_gbc
-  ldh [rVBK],a
-  ld h,0
-  ld de,_SCRN0
-  ld bc,2048
-  call memset
-  xor a
-  ldh [rVBK],a
-.not_gbc:
-  ret
-
-section "GBMONOPALETTE", ROM0, ALIGN[3]
-gbmonopalette::
-  if GBMONO_GREEN
-  drgb $E8F840
-  drgb $90C040
-  drgb $408040
-  drgb $004040
-  else
-  drgb $F8F8F8
-  drgb $A8A8A8
-  drgb $585858
-  drgb $000000
-  endc
 
 endc
