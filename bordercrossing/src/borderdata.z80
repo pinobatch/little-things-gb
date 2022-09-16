@@ -1,3 +1,9 @@
+;
+; List of loaded borders
+;
+; 2022 Damian Yerrick, no rights reserved
+;
+
 ; Hardcoded bank number caution:
 ; Border list is at the very start of ROMX[1], so that the
 ; end-user inserter can replace the borders.

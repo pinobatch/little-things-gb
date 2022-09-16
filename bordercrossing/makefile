@@ -1,5 +1,13 @@
 #!/usr/bin/env make -f
-
+#
+# Makefile for Border Crossing
+# Copyright 2022 Damian Yerrick
+#
+# Copying and distribution of this file, with or without
+# modification, are permitted in any medium without royalty
+# provided the copyright notice and this notice are preserved.
+# This file is offered as-is, without any warranty.
+#
 romname := bordercrossing
 headertitle := BORDER CROSSING
 borders := bootborder \
@@ -36,6 +44,9 @@ $(objdir)/fink.z80: tilesets/fink.png
 $(objdir)/finkmono.2bpp: tilesets/finkmono.png
 	@mkdir -p $(objdir)
 	$(PY) tools/pilbmp2nes.py --planes "0,1" -H16 $< $@
+$(objdir)/carttypeicons.2bpp: tilesets/carttypeicons.png
+	@mkdir -p $(objdir)
+	$(PY) tools/pilbmp2nes.py --planes "0,1" -W16 -H16 $< $@
 
 $(objdir)/%.nam.sentinel: tilesets/%.png
 	@mkdir -p $(objdir)
@@ -59,7 +70,8 @@ $(objdir)/%.o: $(objdir)/%.z80
 $(objdir)/main.o: $(objdir)/bootborder.border
 $(objdir)/borderdata.o: $(foreach o,$(borders),$(objdir)/$(o).border)
 $(objdir)/title.o: $(objdir)/titlepic.2bpp.pb16 $(objdir)/titlepic.nam
-$(objdir)/pakswap.o: $(objdir)/finkmono.2bpp.pb16
+$(objdir)/pakswap.o: \
+  $(objdir)/finkmono.2bpp.pb16 $(objdir)/carttypeicons.2bpp.pb16
 
 # Linking
 $(objdir)/$(romname).gb.sentinel: $(foreach o,$(objs),$(objdir)/$(o).o)

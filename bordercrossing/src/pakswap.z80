@@ -1,9 +1,39 @@
+;
+; Wait for a Game Boy cartridge swap
+;
+; Copyright 2022 Damian Yerrick
+; 
+; This software is provided 'as-is', without any express or implied
+; warranty.  In no event will the authors be held liable for any damages
+; arising from the use of this software.
+; 
+; Permission is granted to anyone to use this software for any purpose,
+; including commercial applications, and to alter it and redistribute it
+; freely, subject to the following restrictions:
+; 
+; 1. The origin of this software must not be misrepresented; you must not
+;    claim that you wrote the original software. If you use this software
+;    in a product, an acknowledgment in the product documentation would be
+;    appreciated but is not required.
+; 2. Altered source versions must be plainly marked as such, and must not be
+;    misrepresented as being the original software.
+; 3. This notice may not be removed or altered from any source distribution.
+;
 include "src/hardware.inc"
 
 section "PakSwap_setup", ROM0
 
 wait_for_pakswap::
   call cls_set_title
+
+  ; VRAM map for pak swap
+  ; $8600-$87FF: Title bar
+  ; $8800-$89FF: Title of border
+  ; $8A00-$8BFF: "Swap paks now!" prompt
+  ; $8C00-$93FF: Monospace font for drawing cartridge name
+  ; $9400-$94FF: Cartridge type images
+  ; $9600-$97FF: "B: Back; A: Play" prompt
+
   ld hl, $9842
   ld bc, $8010
   call Vwf16SetTilemap
@@ -22,10 +52,6 @@ wait_for_pakswap::
   ld de, $9902
   ld hl, pakswap_prompt_msg
   call Vwf16DrawStrAt
-  ld a, $40
-  ld de, $98C2
-  ld hl, pakswap_coming_soon_msg
-  call Vwf16DrawStrAt
   call Vwf16Clear
   ld b, 1
   ld hl, back_play_status_msg
@@ -43,7 +69,7 @@ wait_for_pakswap::
   ; Load assets for cart name check
   ld hl, $8C00
   ld de, fink_mono_pb16
-  ld b, 128
+  ld b, 128 + 16
   call pb16_unpack_block
 
   ; Load Pak Swap code into HRAM
@@ -72,10 +98,11 @@ wait_for_pakswap::
   di
   jp wait_for_pakswap_tail
 
-pakswap_coming_soon_msg: db "COMING SOON:",0
 pakswap_prompt_msg: db "Swap paks now!",0
 back_play_status_msg: db "B: Back   A: Play",0
-fink_mono_pb16: incbin "obj/gb/finkmono.2bpp.pb16"
+fink_mono_pb16:
+  incbin "obj/gb/finkmono.2bpp.pb16"
+  incbin "obj/gb/carttypeicons.2bpp.pb16"
 
 ; Part that runs in RAM ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -135,6 +162,11 @@ pakswap_wram_LOAD:
 load "PakSwap_WRAMCODE", WRAM0
 pakswap_wram_RUN:
 
+rom_header_title equ $0134
+SIZEOF_HEADER_TITLE equ 15
+rom_gbc_flag equ $0143  ; >$80: GBC
+rom_sgb_flag equ $0146  ; $03: SGB
+
 wait_for_pakswap_wram:
   ; throbber
   ldh a, [hVblanks]
@@ -184,13 +216,82 @@ wait_for_pakswap_wram:
     ret
 
   .is_inserted:
-    ; TODO: Display the name of the inserted cart
+    ; Display the header name of the inserted cartridge
+    ld de, $99C3
+    ld hl, rom_header_title
+    ld b, 15
+    .nameloop:
+      ld a, [hl+]
+      add a
+      jr z, .namepad
+      jr c, .namepad
+      ; 40-7E: punctuation; 80-BE: uppercase; C0-FE: lowercase
+      cp $C0
+      jr c, :+
+        sub $40
+      :
+      add $80
+      ld [de], a
+      set 5, e
+      inc a
+      ld [de], a
+      res 5, e
+      inc e
+      dec b
+      jr nz, .nameloop
+    jr .namenopad
+    .namepad:
+      ld a, $C0
+      ld [de], a
+      set 5, e
+      ld [de], a
+      res 5, e
+      inc e
+      dec b
+      jr nz, .namepad
+    .namenopad:
+    
+    
+
+    ; Display the platform (GB, SGB, GBC, GBC only)
+    ; of the inserted cartridge
+    ld a, [rom_gbc_flag]
+    ld b, b
+    swap a
+    and $0C
+    cp $0C  ; GBC-only ($C0) overrides others
+    jr z, .have_cart_type
+      cp $04  ; $40-$7F are the end of a title, not a GBC flag
+      jr nz, :+
+        xor a
+      :
+      ; SGB enhanced overrides GBC enhanced
+      ld b, a
+      ld a, [rom_sgb_flag]
+      cp $03
+      ld a, b
+      jr nz, .have_cart_type
+      ld a, $04
+    .have_cart_type:
+    ld hl, $99C1
+    or a, $40
+    ld [hl+], a
+    inc a
+    ld [hl-], a
+    inc a
+    set 5, l
+    ld [hl+], a
+    inc a
+    ld [hl-], a
+    
   ret
 
 pakswap_handle_exit:
   and PADF_B
   ret nz  ; If B pressed, go back to menu
-  
+
+  ; Make some approximation of the parts of the GB's power-up state
+  ; that commercial games care about (apart from speedrun scene)
   xor a
   ldh [rLCDC], a
   ld hl, $8000
@@ -200,7 +301,7 @@ pakswap_handle_exit:
     jr z, .clrloop
   ldh [rIE], a
   ldh [rIF], a
-  inc a
+  ld a, %00000011
   ldh [rBGP], a
   ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8000
   ldh [rLCDC], a
@@ -209,6 +310,7 @@ pakswap_handle_exit:
     cp 144
     jr nz, .lyloop
 
+  ld sp, $FFFE
   ld a, 1
   jp $0100
 

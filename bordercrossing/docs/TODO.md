@@ -1,17 +1,9 @@
 Border Crossing burn-down list
 ==============================
 
-1. wait routine: draw name of inserted cart
+1. announce release on Twitter and Discord
 2. test for di halt and add VisualBoyAdvance warning
-3. 
-4. 
-5. 
-6. 
-7. 
-8. 
-9. 
-10. 
-11. 
-12. draw the rest of the owl
+3. border injector
+4. border contest?
 
 then continue to gridfloor-nes
