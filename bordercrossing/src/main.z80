@@ -78,12 +78,17 @@ is_sgb:
   ld l, c
   ld h, b
   call sgb_send_border
+  
+  call wait_for_pakswap
+  jr .listloop
 
+  if 0
   call lcd_off
   ld h, $7F
   call clear_scrn0_to_h
   ld hl, sgb_ok_msg
   jr four_lines_and_halt
+  endc
 
 four_lines_and_halt:
   ld b, $80

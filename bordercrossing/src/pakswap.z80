@@ -1,1 +1,216 @@
 include "src/hardware.inc"
+
+section "PakSwap_setup", ROM0
+
+wait_for_pakswap::
+  call cls_set_title
+  ld hl, $9842
+  ld bc, $8010
+  call Vwf16SetTilemap
+  ld hl, wCursorY
+  ld a, [hl+]  ; add cursor Y
+  add [hl]     ; to page start
+  ld b, 0
+  call listpicker_draw_a_at_b
+  ld hl, wVWFRenderBuffer
+  ld de, $8800
+  ld bc, $200
+  call memcpy
+
+  ; Draw prompt and status bar
+  ld a, $A0
+  ld de, $9902
+  ld hl, pakswap_prompt_msg
+  call Vwf16DrawStrAt
+  ld a, $40
+  ld de, $98C2
+  ld hl, pakswap_coming_soon_msg
+  call Vwf16DrawStrAt
+  call Vwf16Clear
+  ld b, 1
+  ld hl, back_play_status_msg
+  call Vwf16DrawStr
+  call Vwf16Invert
+  call Vwf16ConvertToCHR
+  ld hl, $9A03
+  ld bc, $600E
+  call Vwf16SetTilemap
+  ld hl, wVWFRenderBuffer
+  ld de, $9600
+  ld bc, $01C0
+  call memcpy
+
+  ; Load assets for cart name check
+  ld hl, $8C00
+  ld de, fink_mono_pb16
+  ld b, 128
+  call pb16_unpack_block
+
+  ; Load Pak Swap code into HRAM
+  ld hl, pakswap_hram_LOAD
+  ld de, pakswap_hram_RUN
+  call memcpy_pascal16
+  ld hl, pakswap_wram_LOAD
+  ld de, pakswap_wram_RUN
+  call memcpy_pascal16
+
+  .release_wait:
+    call read_pad
+    ld a, [hCurKeys]
+    or a
+    jr nz, .release_wait
+
+  ld a, %11111111
+  ldh [rBGP], a
+  ld a, IEF_VBLANK
+  ldh [rIE], a
+  ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8000
+  ldh [rLCDC], a
+  call sgb_unfreeze
+  ld a, %11100100
+  ldh [rBGP], a
+  di
+  jp wait_for_pakswap_tail
+
+pakswap_coming_soon_msg: db "COMING SOON:",0
+pakswap_prompt_msg: db "Swap paks now!",0
+back_play_status_msg: db "B: Back   A: Play",0
+fink_mono_pb16: incbin "obj/gb/finkmono.2bpp.pb16"
+
+; Part that runs in RAM ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+section "PakSwap_RAM_code", ROM0
+
+pakswap_hram_LOAD:
+  dw pakswap_hram_RUN_end-pakswap_hram_RUN
+load "PakSwap_HRAMCODE", HRAM
+pakswap_hram_RUN:
+
+wait_for_pakswap_tail:
+.loop:
+
+  ; Access WRAM once every 8 frames
+  ldh a, [hVblanks]
+  inc a
+  ldh [hVblanks], a
+  and $07
+  call z, wait_for_pakswap_wram
+
+  ; 1. Wait for LY>=16 then change LCDC to LCDCF_ON|LCDCF_BGON|LCDCF_BG8000
+  .lyspin:
+    ldh a, [rLY]
+    sub 16
+    cp 144-16
+    jr nc, .lyspin
+  ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8800
+  ldh [rLCDC], a
+
+  ; Wait for vblank
+  xor a
+  ldh [rIF], a
+  halt
+
+  ; Read only the buttons (not the Control Pad)
+  ; while turning on rendering
+  ld hl, rP1
+  ld a, P1F_GET_BTN
+  ld [hl], a
+  ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8000
+  ldh [rLCDC], a
+  ld c, P1F_GET_NONE
+  ld a, [hl]
+  ld [hl], c
+  cpl
+.hAndInstruction:
+  and PADF_START|PADF_A|PADF_B
+  jr z, .loop
+  jp pakswap_handle_exit
+
+pakswap_hram_RUN_end:
+endl
+
+
+pakswap_wram_LOAD:
+  dw pakswap_wram_RUN_end-pakswap_wram_RUN
+load "PakSwap_WRAMCODE", WRAM0
+pakswap_wram_RUN:
+
+wait_for_pakswap_wram:
+  ; throbber
+  ldh a, [hVblanks]
+  and $10
+  cp 1
+  ld a, low(("." - " ") * 2 + $C0)
+  adc 0
+  ld [$99F3], a
+
+  ; check if inserted
+  ld a, [$106]
+  cp $66
+  jr z, .is_inserted
+    ld a, PADF_START|PADF_A
+    ; ldh [hAndInstruction+1], a
+
+    ; Hide B button prompt
+    ld a, $7E
+    ld hl, $9a02
+    ld b, 8
+    :
+      ld [hl+], a
+      dec b
+      jr nz, :-
+    ld hl, $9a22
+    ld b, 8
+    :
+      ld [hl+], a
+      dec b
+      jr nz, :-
+
+    ; Hide inserted cartridge name
+    inc a
+    ld hl, $99C1
+    ld b, 18
+    :
+      ld [hl+], a
+      dec b
+      jr nz, :-
+    ld hl, $99E1
+    ld b, 18
+    :
+      ld [hl+], a
+      dec b
+      jr nz, :-
+
+    ret
+
+  .is_inserted:
+    ; TODO: Display the name of the inserted cart
+  ret
+
+pakswap_handle_exit:
+  and PADF_B
+  ret nz  ; If B pressed, go back to menu
+  
+  xor a
+  ldh [rLCDC], a
+  ld hl, $8000
+  .clrloop:
+    ld [hl+], a
+    bit 5, h
+    jr z, .clrloop
+  ldh [rIE], a
+  ldh [rIF], a
+  inc a
+  ldh [rBGP], a
+  ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8000
+  ldh [rLCDC], a
+  .lyloop:
+    ldh a, [rLY]
+    cp 144
+    jr nz, .lyloop
+
+  ld a, 1
+  jp $0100
+
+pakswap_wram_RUN_end:
+endl

@@ -1,0 +1,58 @@
+; Hardcoded bank number caution:
+; Border list is at the very start of ROMX[1], so that the
+; end-user inserter can replace the borders.
+section "Border list", ROMX[$4000], BANK[1]
+border_list::
+  dw border0_name
+  dw border0
+  db bank(border0)
+
+  dw border1_name
+  dw border1
+  db bank(border1)
+
+  dw border2_name
+  dw border2
+  db bank(border2)
+
+  dw border3_name
+  dw border3
+  db bank(border3)
+
+  dw border4_name
+  dw border4
+  db bank(border4)
+
+  dw border5_name
+  dw border5
+  db bank(border5)
+
+  dw border6_name
+  dw border6
+  db bank(border6)
+
+  dw $FFFF
+
+border0_name: db "Canada",0
+border1_name: db "Classic Mac OS",0
+border2_name: db "macOS Big Sur",0
+border3_name: db "Mexico",0
+border4_name: db "Redmond 3.1",0
+border5_name: db "Redmond 98",0
+border6_name: db "Ross by Yoey",0
+
+; The remainder of all banks can go anywhere
+section "Border0", ROMX
+border0: incbin "obj/gb/canada.border"
+section "Border1", ROMX
+border1: incbin "obj/gb/classic_mac.border"
+section "Border2", ROMX
+border2: incbin "obj/gb/sameboy.border"
+section "Border3", ROMX
+border3: incbin "obj/gb/mexico.border"
+section "Border4", ROMX
+border4: incbin "obj/gb/Windows31.border"
+section "Border5", ROMX
+border5: incbin "obj/gb/Windows98.border"
+section "Border6", ROMX
+border6: incbin "obj/gb/Ross_by_Yoey.border"

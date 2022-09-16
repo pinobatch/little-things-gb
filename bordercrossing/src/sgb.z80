@@ -243,7 +243,6 @@ sgb_send_border::
     pop af
 
     ; Second half is the remaining bytes
-    add a
     add 2
     ld b, a
     call pb16_unpack_to_CHRRAM0

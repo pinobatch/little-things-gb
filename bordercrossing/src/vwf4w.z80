@@ -9,8 +9,8 @@ wVWFRenderBuffer:: ds $200
 
 section "vwf4x16", ROM0
 ;;
-; Converts wVWFRenderBuffer in place from composition format to GB
-; CHR format (.2bpp).  Processes (I think) 25 cycles per sliver,
+; Converts wVWFRenderBuffer in place from composition format to
+; GB CHR format (.2bpp).  Processes at 25 cycles per sliver,
 ; completing in 6400 cycles.
 Vwf16ConvertToCHR::
   ld hl, wVWFRenderBuffer
@@ -35,7 +35,7 @@ Vwf16ConvertToCHR::
 
 ;;
 ; Makes a particular area white-on-black.
-; Used used for the top and bottom lines.
+; Used for the title bar at top and status bar at bottom.
 Vwf16Invert::
   ld hl, wVWFRenderBuffer
   ld b, l
@@ -54,7 +54,10 @@ Vwf16Clear::
   ld hl, wVWFRenderBuffer
   ld b, l
   ld a, l
+  ld b, 512/4
 .loop:
+  ld [hl+], a
+  ld [hl+], a
   ld [hl+], a
   ld [hl+], a
   dec b
@@ -175,7 +178,7 @@ Vwf16DrawStr::
 
 ;;
 ; Draws a VWF string to the tileset and tilemap.
-; @param HL the <$20-termintaed string
+; @param HL the <$20-terminated string
 ; @param DE tilemap address
 ; @param A starting tile number to use
 ; @return A: ending tile number, C: width in tiles; HL: end of string
