@@ -20,13 +20,13 @@ turn off the Control Deck and try again.
 1. Press the Start Button at the title screen.
 2. Use the Control Pad to view border titles and choose one.
 3. Press the A Button to preview the border.  To view another border,
-   press the B Button.
+   press the B Button to show the list.
 4. Carefully remove the flash cartridge from your Super Game Boy's
    Game Pak slot and firmly insert another game.
 5. Some games automatically start when inserted.  Other games show a
    title at the bottom of the screen.  Press the A Button to play.
 
-A game with SGB enhancement will run without enhancement so that it
+A game with SGB enhancement will run without enhancement, so that it
 does not overwrite your chosen border.
 
 How to build

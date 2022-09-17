@@ -44,10 +44,8 @@ reset:
   ld a, 0  ; save flags for hCapability write
   ldh [rBGP], a
   ldh [rSCX], a
-  ldh [rIE], a
   ldh [rSCY], a
   ldh [rSTAT], a
-  ldh [hVblanks], a
   ld [wCursorY], a
   ld [wCursorPage], a
   rra
@@ -56,18 +54,36 @@ reset:
   ldh [hCurKeys], a
   ld a, $30
   ldh [rP1], a
-  call lcd_off
   ld hl, hramcode_LOAD
   ld de, hramcode_RUN
   call memcpy_pascal16
 
+  ; Detect VisualBoyAdvance by the fact that it calls the vblank
+  ; interrupt handler even while IME is off (see di above)
+  xor a
+  ldh [rIF], a
+  ldh [hVblanks], a
+  inc a
+  ldh [rIE], a
+  halt
+  nop
+  ldh a, [hVblanks]
+  or a
+  jr z, .not_vba
+    ld h, $7F
+    call clear_scrn0_to_h
+    ld hl, vba_error_msg
+    jr four_lines_and_halt
+  .not_vba:
+
+  ; Wait half a second for the Super Game Boy to start responding
+  call lcd_off
   ld b, 8
   :
     call sgb_wait
     dec b
     jr nz, :-
   call detect_sgb
-
   ldh a, [hCapability]
   cp 1
   jr z, is_sgb
@@ -153,10 +169,15 @@ program_name::
   db "Border Crossing", 10
   db "requires the", 10
   db "Super Game Boy", 10
-  db "accessory.",0
-sgb_ok_msg:
-  db "Coming soon:", 10
-  db "Swap to a game",0
+  db "accessory.", 0
+vba_error_msg:
+  db "Border Crossing", 10
+  db "uses interrupt", 10
+  db "behavior that", 10
+  db "VisualBoyAdvance", 10
+  db "gets wrong.  Try", 10
+  db "bgb, mGBA, or a", 10
+  db "Super Game Boy.", 0
 
 ; memcpy and friends ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
