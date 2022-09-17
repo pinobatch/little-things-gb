@@ -12,6 +12,8 @@ operating systems' window decorations.
 How to use
 ----------
 
+![The title screen of Border Crossing, showing a rectangle shaped like a TV and an arrow pointing to an illustration of a Game Pak. Cut to a list of borders: Canada, Classic Mac OS, macOS Big Sur, Mexico, Redmond 3.1, Redmond 98, Ross by Yoey, and a cursor moving down to Redmond 3.1. The border changes to a 1991-era desktop computer, and the interior shows "Swap paks now!" and a blinking dot at the lower right. Title "BORDER CROSSING" at the bottom disappears and "BUBBLE GHOST" appears. The screen changes to Bubble Ghost's title screen followed by its gameplay screen](docs/SwapToBubbleGhost.gif)
+
 Dirt on connectors can sometimes freeze the SGB while performing a
 pak swap.  Clean your cartridges' edge connectors with isopropyl
 rubbing alcohol on a cotton swab first.  If the screen freezes,
