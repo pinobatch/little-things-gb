@@ -9,6 +9,7 @@
 # This file is offered as-is, without any warranty.
 #
 romname := bordercrossing
+version := 0.01
 headertitle := BORDER CROSSING
 borders := bootborder \
   sameboy classic_mac canada mexico Ross_by_Yoey Windows31 Windows98
@@ -20,7 +21,7 @@ PY :=
 GBEMU ?= sameboy
 
 # Convenience targets
-.PHONY: all run clean
+.PHONY: all run clean dist zip
 
 all: $(romname).gb
 
@@ -81,3 +82,13 @@ $(romname).gb: $(objdir)/$(romname).gb.sentinel makefile
 	rgbfix -jsv -k P8 -l 0x33 -m MBC5 -p 0xFF -r 0 -t "$(headertitle)" $@
 $(romname).sym $(romname).map: $(objdir)/$(romname).gb.sentinel
 	test -f $@
+
+# Packaging
+dist: zip
+zip: $(romname)-$(version).zip
+$(romname)-$(version).zip: zip.in $(romname).gb makefile
+	tools/zipup.py -o $@ $< $(basename $@)
+zip.in:
+	git ls-files | grep -e "^[^\.]" > zip.in
+	echo $@ >> $@
+	echo $(romname).gb >> $@
