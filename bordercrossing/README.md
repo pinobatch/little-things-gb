@@ -40,6 +40,13 @@ and Pillow (Python Imaging Library).  Then run `make`.
 Adding borders
 --------------
 
+A border is 256 by 224 pixels and may have up to 256 distinct
+8×8-pixel characters.  Each character may use transparency and the
+colors in one of three 15-color palettes.  Characters may be flipped
+horizontally, flipped vertically, or reused with another palette.
+The center 160 by 144 pixels should be transparent or mostly so,
+as the game screen appears there.
+
 In the present proof of concept, borders must be added in
 `src/borderdata.z80` and `makefile`.  A future version may include a
 tool to scan a folder for border images, convert them, and pack them
@@ -55,5 +62,12 @@ Border credits:
 Legal
 -----
 
-Copyright 2022 Damian Yerrick  
-License: zlib
+Copyright 2022 Damian Yerrick
+
+- Displayer: zlib License
+- Converter: zlib License
+- Converter uses a subpalette packer based on the pagination problem
+  solver accompanying "Algorithms for the Bin Packing Problem with
+  Overlapping Items" by [Aristide Grange et al.] under MIT License
+
+[Aristide Grange et al.]: https://github.com/pagination-problem/pagination

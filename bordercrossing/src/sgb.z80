@@ -212,17 +212,6 @@ sgb_load_trn_tilemap::
   ld de, _SCRN0
   jp load_full_nam
 
-;;
-; Turns on rendering, sends a *_TRN packet with first two bytes
-; A and B, and turns rendering back off.
-sgb_send_trn_ab::
-  ld l, a
-  ld a,LCDCF_ON|LCDCF_BGON|LCDCF_BG8000|LCDCF_BG9800
-  ldh [rLCDC],a
-  ld a, l
-  call sgb_send_ab
-  jp lcd_off
-
 SIZEOF_SGB_BORDER_TILEMAP EQU 32 * 2 * 28
 SIZEOF_SGB_BORDER_PALETTE EQU 16 * 2 * 4
 SGB_BORDER_PALETTE_ADDR EQU $8800
@@ -231,8 +220,8 @@ SGB_BORDER_PALETTE_ADDR EQU $8800
 ; Sends a border consisting of the following:
 ; 1. unique tile count minus 1
 ; 2. 1-256 4bpp tiles compressed with PB16
-; 3. 1792 bytes of tilemap
-; 4. 128 bytes of palette
+; 3. 1792 bytes of tilemap compressed with PB16
+; 4. 96 bytes of palette (not compressed)
 ; @param HL start of border data
 sgb_send_border::
   push hl
@@ -252,7 +241,6 @@ sgb_send_border::
     ; ld b, 0  ; guaranteed by pb16_unpack
     jr .do_final_CHR_TRN
   .is_2_chr_trns:
-    ; Caution: This route is not tested!
     ; First half is 4K
     push af
     ld b, low(128 * 32 / 16)
@@ -275,7 +263,7 @@ sgb_send_border::
   call sgb_send_trn_ab
   pop de
 
-  ; Unpack tilemap
+  ; Unpack tilemap and copy palette
   ld b,SIZEOF_SGB_BORDER_TILEMAP/16
   call pb16_unpack_to_CHRRAM0
   ld h, d
@@ -284,5 +272,16 @@ sgb_send_border::
   ld c, SIZEOF_SGB_BORDER_PALETTE
   call memcpy
   ; ld b, 0  ; guaranteed by memcpy
-  ld a, $14<<3|1
-  jp sgb_send_trn_ab
+  ld a, $14<<3|1  ; PCT_TRN
+  ; fall through to sgb_send_trn_ab
+
+;;
+; Turns on rendering, sends a *_TRN packet with first two bytes
+; A and B, and turns rendering back off.
+sgb_send_trn_ab::
+  ld l, a
+  ld a,LCDCF_ON|LCDCF_BGON|LCDCF_BG8000|LCDCF_BG9800
+  ldh [rLCDC],a
+  ld a, l
+  call sgb_send_ab
+  jp lcd_off

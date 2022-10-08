@@ -77,7 +77,7 @@ def parse_argv(argv):
 def main(argv=None):
     args = parse_argv(argv or sys.argv)
     subpalsize = 15
-    max_subpals = 4
+    max_subpals = 3
     first_subpal = 4
     max_tiles = 256
 

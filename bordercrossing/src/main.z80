@@ -97,6 +97,8 @@ reset:
 is_sgb:
   ld hl, bootborder
   call sgb_send_border
+  ld hl, border_palette_packet
+  call sgb_send
   call show_title_screen
 
 .listloop:
@@ -283,3 +285,8 @@ endl
 
 section "borderdata", ROM0
 bootborder: incbin "obj/gb/bootborder.border"
+border_palette_packet:
+  db $01  ; PAL01
+  dw $421 * 31, $421 * 21, $421 * 11, $421 * 0
+  dw            $421 * 21, $421 * 11, $421 * 0
+  db $00
