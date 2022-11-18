@@ -31,24 +31,23 @@ wVWFRenderBuffer:: ds $200
 section "vwf4x16", ROM0
 ;;
 ; Converts wVWFRenderBuffer in place from composition format to
-; GB CHR format (.2bpp).  Processes at 25 cycles per sliver,
-; completing in 6400 cycles.
+; GB CHR format (.2bpp).  Processes at 22 cycles per sliver,
+; completing in 5600 cycles and change.
 Vwf16ConvertToCHR::
   ld hl, wVWFRenderBuffer
-  ld b, l
+  ld bc, $000F ; B: loop counter; C: and mask
 .loop:
   ld a, [hl+]
   ld d, a      ; D=F E D C  7 6 5 4
   ld a, [hl-]  ; A=B A 9 8  3 2 1 0
   swap a       ; A=3 2 1 0  B A 9 8
   xor d        ; A=F3E2D1C0 7B6A5948
-  and $0F      ; A=L L L L  7B6A5948
-  ld e, a
+  ld e, a      ; E=F3E2D1C0 7B6A5948
+  and c        ; A=L L L L  7B6A5948
   xor d        ; A=F E D C  B A 9 8
   ld [hl+], a
-  ld a, [hl]   ; A=B A 9 8  3 2 1 0
-  swap e       ; E=7B6A5948 L L L L
-  xor e        ; A=7 6 5 4  3 2 1 0
+  xor e        ; A=3 2 1 0  7 6 5 4
+  swap a       ; A=7 6 5 4  3 2 1 0
   ld [hl+], a
   dec b
   jr nz, .loop
