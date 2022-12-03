@@ -23,7 +23,7 @@ rgblink -o "$1.gb" -p 0xFF -m "$1.map" -n "$1.sym" "obj/gb/bdos.o" "obj/gb/$1.o"
 rgbfix -jvt "$inttitle" -p 0xFF "$1.gb"
 
 # to build:
-# mk.sh main
+# ./mk.sh main
 # to run:
 # wine /path/to/bgb.exe -watch main.gb &
 # to make zip:

@@ -211,7 +211,7 @@ putc_a:
 
     ; Write the character
     .statwait:
-      ld a, [rSTAT]
+      ldh a, [rSTAT]
       and STATF_BUSY
       jr nz, .statwait
     ld [hl], e
@@ -220,7 +220,7 @@ putc_a:
     inc [hl]
 
     ; Scroll into range
-    ld a, [rSCY]
+    ldh a, [rSCY]
     ld c, a
     ld a, b
     sub c
@@ -228,7 +228,7 @@ putc_a:
     ret c
     ld a, b
     sub 136
-    ld [rSCY], a
+    ldh [rSCY], a
     ret
   .control_character:
   cp 8
@@ -267,7 +267,7 @@ bdos_newline:
   xor a
   .clreol_loop:
     .statwait:
-      ld a, [rSTAT]
+      ldh a, [rSTAT]
       and STATF_BUSY
       jr nz, .statwait
     ld [hl], e
@@ -305,9 +305,9 @@ bdos_cls:
   ld a, IEF_VBLANK
   ldh [rIE], a
   ld a, %11111100
-  ld [rBGP], a
+  ldh [rBGP], a
   ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8800|LCDCF_BG9800
-  ld [rLCDC], a
+  ldh [rLCDC], a
   ret
 
 section "bdos_puts", ROM0
@@ -365,7 +365,7 @@ init:
 
 section "bdos_lcd_off", ROM0
 lcd_off:
-  ld a, [rLCDC]
+  ldh a, [rLCDC]
   add a
   ret nc
   .vwaitloop:
@@ -439,7 +439,7 @@ read_pad::
 
   ; And release the controller
   ld a,P1F_NONE
-  ld [rP1],a
+  ldh [rP1],a
 
   ; Combine with previous cur_keys to make new_keys
   ldh a,[cur_keys]

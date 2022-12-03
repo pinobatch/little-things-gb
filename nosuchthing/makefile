@@ -38,10 +38,10 @@ PNGTOCHR := ../common/tools/pngtochr$(DOTEXE)
 .PHONY: ggrun run all dist zip clean
 
 ggrun: $(title).gg $(title).sym
-	"$(HOME)/develop/meka/meka/meka" $<
+	"$(HOME)/develop/emulators/meka/meka/meka" $<
 
 run: $(title).gb $(title).sym
-	wine "$(HOME)/.wine/drive_c/Program Files (x86)/bgb/bgb.exe" $<
+	sameboy $<
 
 all: $(title).gb
 

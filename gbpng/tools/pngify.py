@@ -21,15 +21,15 @@ expected_ihdr = bytes.fromhex("89504e470d0a1a0a0000000d49484452")
 
 def parse_argv(argv):
     p = argparse.ArgumentParser()
-    p.add_argument("gbfile")
-    p.add_argument("pngfile")
-    p.add_argument("outfile")
+    p.add_argument("gbfile", help="Game Boy ROM")
+    p.add_argument("pngfile", help="PNG image")
+    p.add_argument("outfile", help="polyglot file output")
+    p.add_argument("-v", "--verbose", action="store_true")
     return p.parse_args(argv[1:])
 
 def main(argv=None):
-    verbose = True
     args = parse_argv(argv or sys.argv)
-    if verbose:
+    if args.verbose:
         print("args is", args, file=sys.stdout)
     with open(args.gbfile, "rb") as infp:
         gbdata = bytearray(infp.read())
@@ -41,10 +41,10 @@ def main(argv=None):
     ihcalccrc = crc32(ihdrdata) & 0xffffffff
     ihstoredcrc = struct.unpack_from(">I", pngdata, 16 + 13)[0]
     if ihcalccrc != ihstoredcrc:
-        raise ValueError("%s does not have a PNG header" % args.pngfile)
+        raise ValueError("%s: PNG header CRC is wrong" % args.pngfile)
     
     trimlen = len(gbdata.rstrip(gbdata[-1:]))
-    if verbose:
+    if args.verbose:
         print(len(gbdata), "trims to", trimlen, file=sys.stderr)
     if len(gbdata) - trimlen - 4 < len(pngdata) - 33:
         raise ValueError(

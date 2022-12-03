@@ -74,14 +74,11 @@ $(title).gb: $(objlisto)
 $(title).gb.png: tools/pngify.py $(title).gb $(pngfile)
 	$(PY) $^ $@
 
-obj/gb/%.o: obj/gb/%-dedent.z80 src/hardware.inc src/global.inc
-	rgbasm -o $@ $<
+obj/gb/%.o: src/%.z80 src/hardware.inc src/global.inc
+	rgbasm -h -o $@ $<
 
 obj/gb/%.o: obj/gb/%.z80
-	rgbasm -o $@ $<
-
-obj/gb/%-dedent.z80: src/%.z80
-	$(PY) tools/bgrdedent.py -o $@ $<
+	rgbasm -h -o $@ $<
 
 # Files that will be included with incbin
 

@@ -28,7 +28,7 @@ ifdef COMSPEC
   PY := py -3
 else
   ifndef GBEMU
-    GBEMU := ~/.wine/drive_c/Program\ Files\ \(x86\)/bgb/bgb.exe
+    GBEMU := sameboy
   endif
   PY := python3
 endif
