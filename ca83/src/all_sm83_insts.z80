@@ -867,3 +867,11 @@ precedingglobalsymbol:
   xor $EE
   or $6F
   cp $EF
+
+  ; 16-bit reg-to-reg ld
+  ld bc, de
+  ld bc, hl
+  ld de, bc
+  ld de, hl
+  ld hl, bc
+  ld hl, de
