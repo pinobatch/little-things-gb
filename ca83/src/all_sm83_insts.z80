@@ -1,7 +1,9 @@
+; to run the test:
+; ca65 -o /dev/null --listing result.txt src/all_sm83_insts.z80
+
 .include "sm83isa.mac"
 
 .code
-
 precedingglobalsymbol:
 
   ; Group 0 instructions ($00-$3F)
@@ -298,7 +300,7 @@ precedingglobalsymbol:
   rst $0020
   
   ; $E8-$EF
-  add sp, -24
+  add sp, -114
   jp hl
   ld [$aeae], a
   xor a, $EE
@@ -759,9 +761,10 @@ precedingglobalsymbol:
   mov a, [hl]
   mov a, a
 
-  ; $E2, $E9, $EA, $F2, $F8, $F9, $FA
+  ; $E2, $E8, $E9, $EA, $F2, $F8, $F9, $FA
   ldh [c], a
   mov [$ff00+c], a
+  sub sp, 114
   ld pc, hl
   mov pc, hl
   mov [$aeae], a

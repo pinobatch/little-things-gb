@@ -384,7 +384,12 @@
 .endmacro
 
 .macro sub dst, src
-  _sm83_alu $90, dst, src
+  .if .xmatch ({dst}, sp)
+    .byte $E8
+    _sm83_sbyte -(src)
+  .else
+    _sm83_alu $90, dst, src
+  .endif
 .endmacro
 
 .macro sbc dst, src
