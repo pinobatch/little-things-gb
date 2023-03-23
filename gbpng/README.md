@@ -80,18 +80,21 @@ point at address $0A1A0A (or $021A0A for 2 to 4 Mbit ROMs).
 
 **Master System and Game Gear:** Appears tricky.  The CPU starts at
 $0000 executing the PNG header, treating the width, height, and CRC32
-of the `IHDR` chunk as opcodes.  Maxim in the SMS Power community
-suggested making an `IHDR` of size 24 bytes instead of 13 to turn
-its size into a `jr` instruction.  A nonstandard size for `IHDR`
-may cause some decoders to reject an image.  And even if decoders
-tolerate oversize `IHDR`, a ROM intended for 50-pin machines would
-need to use a mapper so that the `TMR SEGA` block can specify that
-the checksum applies only to the first 32 KiB.
+of the `IHDR` chunk as opcodes.  This limits the combinations of
+width, height, and color that an attached image may have, as these
+may cause CRC32 values containing unsafe opcodes.  Trying to work
+around this by extending `IHDR`, as suggested by Maxim in the SMS
+Power community, fails because [libpng rejects oversize] `IHDR`
+chunks.  Furthermore, a ROM intended for 50-pin machines would need
+to use a mapper so that the `TMR SEGA` block can specify that the
+checksum applies only to the first 32 KiB.
 
 **NES:** Not possible; PNG header overlaps iNES header.
 
 **GBA:** Not possible; PNG header overlaps initial jump and
 compressed logo.
+
+[libpng rejects oversize]: https://github.com/glennrp/libpng/blob/a37d4836519517bdce6cb9d956092321eca3e73b/pngpread.c#L227
 
 Legal
 -----
