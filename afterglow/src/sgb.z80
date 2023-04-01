@@ -124,8 +124,20 @@ sgb_send::
   and [hl]
   ret z
   ld c,a
+  .packetloop:
+    call sgb_send_one
+    call sgb_wait
+    dec c
+    jr nz,.packetloop
+  ret
 
-.packetloop:
+;;
+; Sends one packet to the Super Game Boy now, disregarding the
+; recommended 4-frame cooldown after each packet.  Use this if
+; you're doing your own cooldown.
+; @param HL start of packet
+; @return HL end of packet; C unchanged; ABD trashed
+sgb_send_one::
   ; Start transfer by asserting both halves of the key matrix
   ; momentarily.  (This is like strobing an NES controller.)
   xor a
@@ -167,10 +179,6 @@ sgb_send::
   ldh [rP1],a
   ld a,$30
   ldh [rP1],a
-
-  call sgb_wait
-  dec c
-  jr nz,.packetloop
   ret
 
 ;;

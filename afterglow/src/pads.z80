@@ -22,8 +22,8 @@
 include "src/hardware.inc"
 
 
-DAS_DELAY equ 15
-DAS_SPEED equ 3
+def DAS_DELAY equ 15
+def DAS_SPEED equ 3
 
 SECTION "hram_pads", HRAM
 hCurKeys:: ds 1

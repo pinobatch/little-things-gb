@@ -52,11 +52,8 @@ SECTION "lcd_off", ROM0
 ;;
 ; Waits for blanking and turns off rendering.
 ;
-; Unlike NES and Super NES, which continuously generate a video
-; signal to keep the TV's hsync and vsync circuits occupied, the
-; Game Boy LCD uses freesync.  Thus the LCD driver halts entirely
-; when rendering is off, not increasing rLY.  Stopping the video
-; signal outside vblank confuses the circuitry in the LCD panel,
+; The Game Boy PPU halts entirely when rendering is off.  Stopping
+; the signal outside vblank confuses the circuitry in the LCD panel,
 ; causing it to get stuck on a scanline.  This stuck state is the
 ; same as the dark horizontal line when you turn off the Game Boy.
 ;
@@ -92,23 +89,20 @@ wait_vblank_irq_tail:
   jr z, wait_vblank_irq_tail
   ret
 
-
 SECTION "busy_wait_vblank", ROM0
 
 ;;
 ; Waits for forced blank (rLCDC bit 7 clear) or vertical blank
-; (rLY >= 144).  Use before VRAM upload or before clearing rLCDC bit 7.
+; (rLY >= 144).  Use before VRAM upload (if interrupts aren't
+; set up yet) or before clearing rLCDC bit 7.
 busy_wait_vblank::
   ; If rLCDC bit 7 already clear, we're already in forced blanking
   ldh a,[rLCDC]
   rlca
   ret nc
 
-  ; Otherwise, wait for rLCDC to become 144 (not 145) because rLY=0
-  ; represents both the prerender line and the first visible line.
-  ; This differs from Super NES, where the first visible line is 1,
-  ; and NES, which has a post-render line numbered 240 between
-  ; picture and vblank.
+  ; Otherwise, wait for LY to become 144 through 152.
+  ; Most of line 153 is prerender, during which LY reads back as 0.
 .wait:
   ldh a, [rLY]
   cp 144
@@ -171,4 +165,98 @@ load_nam::
   pop bc
   dec c
   jr nz,load_nam
+  ret
+
+section "memset", ROM0
+clear_scrn0_to_0::
+  ld h, 0
+clear_scrn0_to_h::
+  ld de,_SCRN0
+  ld bc,32*32
+  ; fall through to memset
+
+;;
+; Writes BC bytes of value H starting at DE.
+memset::
+  ; Increment B if C is nonzero
+  dec bc
+  inc b
+  inc c
+  ld a, h
+.loop:
+  ld [de],a
+  inc de
+  dec c
+  jr nz,.loop
+  dec b
+  jr nz,.loop
+  ret
+
+section "memset_tiny",ROM0[$08]
+;;
+; Writes C bytes of value A starting at HL.
+memset_tiny::
+  ld [hl+],a
+  dec c
+  jr nz,memset_tiny
+  ret
+
+section "memset_inc",ROM0
+;;
+; Writes C bytes of value A, A+1, ..., A+C-1 starting at HL.
+memset_inc::
+  ld [hl+],a
+  inc a
+  dec c
+  jr nz,memset_inc
+  ret
+
+section "memcpy", ROM0
+
+;;
+; Copy a string preceded by a 2-byte length from HL to DE.
+; @param HL source address
+; @param DE destination address
+memcpy_pascal16::
+  ld a, [hl+]
+  ld c, a
+  ld a, [hl+]
+  ld b, a
+  ; fall through to memcpy
+
+;;
+; Copies BC bytes from HL to DE.
+; @return A: last byte copied; HL at end of source;
+; DE at end of destination; B=C=0
+memcpy::
+  ; Increment B if C is nonzero
+  dec bc
+  inc b
+  inc c
+.loop:
+  ld a, [hl+]
+  ld [de],a
+  inc de
+  dec c
+  jr nz,.loop
+  dec b
+  jr nz,.loop
+  ret
+
+section "set_gbc_palette", ROM0
+;;
+; Loads native GBC palette data.
+; @param A offset into palette memory (0, 8, 16, ..., 56) plus $80
+; @param B number of bytes to copy: 8 times number of subpalettes
+; @param C palette port to write: LOW(rBCPS) or LOW(rOCPS)
+; @param HL data source
+; @return HL at end, C increased by 1, B = 0, DE unchanged
+set_gbc_palette::
+  ld [$FF00+c],a
+  inc c
+.loop:
+  ld a,[hl+]
+  ld [$FF00+c],a
+  dec b
+  jr nz,.loop
   ret
