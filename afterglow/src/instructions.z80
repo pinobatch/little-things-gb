@@ -1,0 +1,18 @@
+instructions_text:
+db "Use this to measure how long",LF
+db "a TV keeps giving off light",LF
+db "after the signal goes dark.",LF
+db LF
+db "The test starts with 120",LF
+db "frames of background to give",LF
+db "time to start measurement.",LF
+db "Each repetition is",LF
+db "5 sync (inverted background)",LF
+db "60 background",LF
+db "5 the chosen color",LF
+db "240 background",LF
+db LF
+db "Caution: Super Game Boy",LF
+db "drops a lot of frames.",LF
+db LF
+db "Concept by zeta0134",0

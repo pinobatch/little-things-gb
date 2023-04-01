@@ -1,0 +1,253 @@
+;
+; Border Crossing: a Super Game Boy border injector
+;
+; Copyright 2022 Damian Yerrick
+; 
+; This software is provided 'as-is', without any express or implied
+; warranty.  In no event will the authors be held liable for any damages
+; arising from the use of this software.
+; 
+; Permission is granted to anyone to use this software for any purpose,
+; including commercial applications, and to alter it and redistribute it
+; freely, subject to the following restrictions:
+; 
+; 1. The origin of this software must not be misrepresented; you must not
+;    claim that you wrote the original software. If you use this software
+;    in a product, an acknowledgment in the product documentation would be
+;    appreciated but is not required.
+; 2. Altered source versions must be plainly marked as such, and must not be
+;    misrepresented as being the original software.
+; 3. This notice may not be removed or altered from any source distribution.
+;
+include "src/hardware.inc"
+include "src/global.inc"
+
+section "hLocals", HRAM[hLocals]
+  ds locals_size
+hInitialA: ds 1
+hCapability:: ds 1
+
+section "WVARS", WRAM0
+wStack: ds 64
+wStackEnd:
+help_line_buffer:: ds 32
+wCursorY: ds 1
+wRedLevel: ds 1
+wGreenLevel: ds 1
+wBlueLevel: ds 1
+wBgLevel: ds 1
+
+section "HEADER", ROM0[$100]
+  nop
+  jp reset
+  ds 76, $00
+
+section "RESET", ROM0
+reset:
+  di
+  xor $11
+  cp 1  ; CF set for GBC only
+  ld sp, wStackEnd
+  ld a, 0  ; save flags for hCapability write
+  ldh [rSCX], a
+  ldh [rSCY], a
+  ldh [rSTAT], a
+  ld [wCursorY], a
+  ld [wBlueLevel], a
+  ld [wBgLevel], a
+  rra
+  ldh [hCapability], a
+  ld a, PADF_A|PADF_START
+  ldh [hCurKeys], a
+  ld a, $30
+  ldh [rP1], a
+  rra
+  ld [wRedLevel], a
+  ld [wGreenLevel], a
+  ld hl, hramcode_LOAD
+  ld de, hramcode_RUN
+  call memcpy_pascal16
+  xor a
+  ld hl, lineImgBuf
+  ld c, 136
+  rst memset_tiny
+  ld hl, SOAM
+  ld c, 160
+  rst memset_tiny
+
+  ; Load the main character set
+  call lcd_off
+  ld hl,main_chr
+  ld de,$8000
+  call memcpy_pascal16
+  ld h, $0A
+  call clear_scrn0_to_h
+
+  ; Wait half a second for the Super Game Boy to start responding
+  ld b, 8
+  :
+    call sgb_wait
+    dec b
+    jr nz, :-
+  ld b, b
+  call detect_sgb
+  ; Error message for not SGB
+  ldh a, [hCapability]
+  or a
+  ld hl, nonsgb_msg
+  jr z, labels_and_halt
+
+  ; Instructions message for SGB
+  ld hl, instructions_msg
+  jr labels_and_halt
+
+
+labels_and_halt:
+  ld de, $820
+  call vwfDrawLabels
+  ld a, %11111100
+  ldh [rBGP], a
+  ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8000
+  ldh [rLCDC], a
+  ldh a, [hCapability]
+  rra
+;  call c, sgb_unfreeze
+  ei
+.loop:
+  halt
+  jr .loop
+
+
+section "CHR_src", ROM0
+main_chr:
+  dw .end-.start
+.start:
+  incbin "obj/gb/chr16.2bpp"
+.end:
+
+section "nonsgb_msg", ROM0
+LF equ $0A
+nonsgb_msg:
+  db 16, 16, "afterglow", LF
+  db 16, 32, "This software plays", LF
+  db 16, 32, "only on Super Game Boy", LF
+  db 16, 32, "or Game Boy Color.", 0
+
+instructions_msg:
+  db 16,  0, "Use this to measure how long",LF
+  db 16,  8, "a TV keeps giving off light",LF
+  db 16, 16, "after the input goes dark.",LF
+  db 16, 32, "After 120 frames of",LF
+  db 16, 40, "background to give time to",LF
+  db 16, 48, "start measurement, these",LF
+  db 16, 56, "repeat until a press:",LF
+  db 24, 64, "5 sync (inverted background)",LF
+  db 24, 72, "60 background",LF
+  db 24, 80, "5 the chosen color",LF
+  db 24, 88, "240 background",LF
+  db 16,104, "Caution: Super Game Boy",LF
+  db 16,112, "drops a lot of frames.",LF
+  db 16,128, "Concept by zeta0134",0
+  
+
+; memcpy and friends ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+section "memset_tiny",ROM0[$08]
+;;
+; Writes C bytes of value A starting at HL.
+memset_tiny::
+  ld [hl+],a
+  dec c
+  jr nz,memset_tiny
+  ret
+
+section "memset_inc",ROM0
+;;
+; Writes C bytes of value A, A+1, ..., A+C-1 starting at HL.
+memset_inc::
+  ld [hl+],a
+  inc a
+  dec c
+  jr nz,memset_inc
+  ret
+
+section "memcpy", ROM0
+clear_scrn0_to_0::
+  ld h, 0
+clear_scrn0_to_h::
+  ld de,_SCRN0
+  ld bc,32*32
+  ; fall through to memset
+
+;;
+; Writes BC bytes of value H starting at DE.
+memset::
+  ; Increment B if C is nonzero
+  dec bc
+  inc b
+  inc c
+  ld a, h
+.loop:
+  ld [de],a
+  inc de
+  dec c
+  jr nz,.loop
+  dec b
+  jr nz,.loop
+  ret
+
+;;
+; Copy a string preceded by a 2-byte length from HL to DE.
+; @param HL source address
+; @param DE destination address
+memcpy_pascal16::
+  ld a, [hl+]
+  ld c, a
+  ld a, [hl+]
+  ld b, a
+  ; fall through to memcpy
+
+;;
+; Copies BC bytes from HL to DE.
+; @return A: last byte copied; HL at end of source;
+; DE at end of destination; B=C=0
+memcpy::
+  ; Increment B if C is nonzero
+  dec bc
+  inc b
+  inc c
+.loop:
+  ld a, [hl+]
+  ld [de],a
+  inc de
+  dec c
+  jr nz,.loop
+  dec b
+  jr nz,.loop
+  ret
+
+section "HRAMCODE_src", ROM0
+;;
+; The routine gets copied to high RAM.  While OAM DMA is running,
+; both ROM and WRAM are inaccessible; only HRAM is readable.
+; But unlike on the NES, the CPU continues to fetch and execute
+; instructions.  So a program needs to run 160 mcycles' worth of
+; code from HRAM until this finishes.  To present a display list,
+; the program calls run_dma.
+hramcode_LOAD:
+  dw hramcode_RUN_end-hramcode_RUN
+load "HRAMCODE", HRAM
+hramcode_RUN:
+
+run_dma::
+  ld a,SOAM >> 8
+  ldh [rDMA],a
+hram_wait160::
+  ld a,40
+.loop:
+  dec a
+  jr nz,.loop
+  ret
+
+hramcode_RUN_end:
+endl
