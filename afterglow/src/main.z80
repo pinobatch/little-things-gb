@@ -95,8 +95,6 @@ reset:
   ld hl,main_chr
   ld de,$8000
   call memcpy_pascal16
-  ld h, $0A
-  call clear_scrn0_to_h
 
   ; Wait half a second for the Super Game Boy to start responding
   ld b, 8
@@ -188,15 +186,21 @@ restart:
     bit PADB_START, b
     jr z, .no_instructions
       ld hl, instructions_msg
+    .do_instructions_and_restart:
       call do_instructions
+    .restart1:
       jp restart
     .no_instructions:
     bit PADB_B, b
     jr z, .no_blank
       ld hl, 0
-      call do_instructions
-      jp restart
+      jr .do_instructions_and_restart
     .no_blank:
+    bit PADB_A, b
+    jr z, .no_run
+      call run_test
+      jr .restart1
+    .no_run:
 
     call get_minimum_cursor_y
 
@@ -473,7 +477,7 @@ update_color:
     lb bc, 8, low(rBCPS)
     call set_gbc_palette
     ld a, $82
-    ld hl, help_line_buffer+1
+    ld hl, help_line_buffer+3
     lb bc, 8, low(rOCPS)
     call set_gbc_palette
     xor a
@@ -573,9 +577,97 @@ menu_color_labels_msg:
   db  16, 40,"Green",LF
   db  16, 48,"Blue",0
 menu_dmg_labels_msg:
-  db  16, 48,"Value",0
+  db  16, 48,"Shade",0
 
 ; Test operation ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+section "run_test", ROM0
+
+def hRepsLeft equ hLocals+0
+
+run_test:
+  call calc_pal01
+  call lcd_off
+  ld h, $0A
+  call clear_scrn0_to_h
+  ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8000
+  ldh [rLCDC], a
+
+  lb bc, 120, 0  ; time to start equipment
+  call color_c_wait_b
+  ret c
+  ldh a, [hRepetitionCount]
+  .reps_loop:
+    ldh [hRepsLeft], a
+    
+    lb bc, 5, 1  ; Sync
+    call color_c_wait_b
+    ret nz
+    lb bc, 60, 0  ; BG (short settle)
+    call color_c_wait_b
+    ret nz
+    lb bc, 5, 2  ; Chosen color
+    call color_c_wait_b
+    ret nz
+    lb bc, 240, 0  ; BG (long
+    call color_c_wait_b
+    ret nz
+    
+    ldh a, [hRepsLeft]
+    dec a
+    jr nz, .reps_loop
+  ret
+
+color_c_wait_b:
+  ldh a, [hCapability]
+  add a
+  ld a, c
+  ; CF true for SGB, CF false ZF false for SGB,
+  ; CF false ZF true for DMG
+  jr nc, .is_not_gbc
+    add a
+    add low(help_line_buffer+1)
+    ld l, a
+    adc high(help_line_buffer+1)
+    sub l
+    ld h, a
+    push bc
+    push hl
+    call wait_vblank_irq
+    pop hl
+    ld a, $80
+    lb bc, 2, low(rBCPS)
+    call set_gbc_palette
+    pop bc
+    dec b
+    ret z
+    jr .no_bgp
+  .is_not_gbc:
+  jr nz, .have_bgp
+    ; SGB: Use C as is
+    ; DMG: Look up bg, inverted bg, or sync
+    ldh a, [hBlueLevel]
+    bit 1, c
+    jr nz, .have_bgp
+    ld a, c
+    ldh a, [hBgLevel]  ; bit 0: 0 for black bg, 1 for white bg
+    xor c  ; bit 0: 0 for black bg or sync on white bg, 1 otherwise
+    rra
+    sbc a  ; FF for black bg or sync on white bg, 00 otherwise
+  .have_bgp:
+    ldh [rBGP], a
+  .no_bgp:
+
+  .loop:
+    push bc
+    call read_pad
+    call wait_vblank_irq
+    pop bc
+    ldh a, [hNewKeys]
+    or a
+    ret nz
+    dec b
+    jr nz, .loop
+  ret
 
 ; memcpy and friends ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
