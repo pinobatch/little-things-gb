@@ -1,0 +1,698 @@
+;
+; Border Crossing: a Super Game Boy border injector
+;
+; Copyright 2022 Damian Yerrick
+; 
+; This software is provided 'as-is', without any express or implied
+; warranty.  In no event will the authors be held liable for any damages
+; arising from the use of this software.
+; 
+; Permission is granted to anyone to use this software for any purpose,
+; including commercial applications, and to alter it and redistribute it
+; freely, subject to the following restrictions:
+; 
+; 1. The origin of this software must not be misrepresented; you must not
+;    claim that you wrote the original software. If you use this software
+;    in a product, an acknowledgment in the product documentation would be
+;    appreciated but is not required.
+; 2. Altered source versions must be plainly marked as such, and must not be
+;    misrepresented as being the original software.
+; 3. This notice may not be removed or altered from any source distribution.
+;
+include "src/global.inc"
+
+section "hLocals", HRAM[hLocals]
+  ds locals_size
+hInitialA: ds 1
+hCapability:: ds 1
+hRedLevel: ds 1
+hGreenLevel: ds 1
+hBlueLevel: ds 1
+hBgLevel: ds 1
+hRepetitionCount: ds 1
+
+section "WVARS", WRAM0
+wStack: ds 64
+wStackEnd:
+help_line_buffer:: ds 32
+wCursorY: ds 1
+wDirtyColor: ds 1
+wSGBCooldown: ds 1
+
+def NUM_MENU_ITEMS equ 5
+def DMG_FIRST_MENU_ITEM equ 2
+def BGLEVEL_NAME_WIDTH equ 3
+def BGLEVEL_NAME_TILE equ $20
+def MENU_Y equ 4
+def RGB_ROWS_X equ 5
+def BGREP_ROWS_X equ 9
+def SGB_COOLDOWN_FRAMES equ 4
+
+section "HEADER", ROM0[$100]
+  nop
+  jp reset
+  ds 76, $00
+
+section "RESET", ROM0
+reset:
+  di
+  xor $11
+  cp 1  ; CF set for GBC only
+  ld sp, wStackEnd
+  ld a, 0  ; save flags for hCapability write
+  ldh [rSCX], a
+  ldh [rSCY], a
+  ldh [rSTAT], a
+  ldh [hVblanks], a
+  ldh [hBlueLevel], a
+  ldh [hBgLevel], a
+  ld [wSGBCooldown], a
+  rra
+  ldh [hCapability], a
+  ld a, PADF_A|PADF_START
+  ldh [hCurKeys], a
+  ld a, $30
+  ldh [rP1], a
+  rra
+  ldh [hRedLevel], a
+  ldh [hGreenLevel], a
+  rra
+  ldh [hRepetitionCount], a
+  ld hl, hramcode_LOAD
+  ld de, hramcode_RUN
+  call memcpy_pascal16
+  xor a
+  ld hl, lineImgBuf
+  ld c, 136
+  rst memset_tiny
+  ld hl, SOAM
+  assert oam_used == SOAM + 160
+  ld c, 161  ; clear SOAM and oam_used
+  rst memset_tiny
+
+  ; Load the main character set
+  call lcd_off
+  ld hl,main_chr
+  ld de,$8000
+  call memcpy_pascal16
+
+  ; Wait half a second for the Super Game Boy to start responding
+  ld b, 8
+  :
+    call sgb_wait
+    dec b
+    jr nz, :-
+  call detect_sgb
+  call get_minimum_cursor_y
+  ld a, d
+  ld [wCursorY], a
+
+; Menu ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+restart:
+  ; Draw the menu with labels
+  call lcd_off
+  ld h, $0A
+  call clear_scrn0_to_h
+
+  ; Draw afterglow logo
+  ldxy hl, 1, 1
+  ld b, 9
+  ld a, $0E
+  ld [wDirtyColor], a
+  .logoloop:
+    ld [hl], a
+    inc a
+    ld de, 32
+    add hl, de
+    ld [hl], a
+    inc a
+    ld de, -31
+    add hl, de
+    dec b
+    jr nz, .logoloop
+
+  ; Draw sensor target border
+  ldxy hl, 4, 11
+  call sensor_target_border_side
+  ldxy hl, 15, 11
+  call sensor_target_border_side
+  ldxy hl, 4, 10
+  ld c, 12
+  rst memset_tiny
+
+  ; Draw sample square
+  dec a
+  ldxy hl, 9, 4
+  ld de, 32-3
+  ld c, 3
+  rst memset_tiny
+  add hl, de
+  ld c, 3
+  rst memset_tiny
+  add hl, de
+  ld c, 3
+  rst memset_tiny
+
+  ; Draw main labels and DMG/color labels
+  ld hl, menu_msg
+  ld de, $800+BGLEVEL_NAME_TILE
+  call vwfDrawLabels
+  ld hl, menu_dmg_labels_msg
+  ldh a, [hCapability]
+  or a
+  jr z, .labels_not_color
+    ld hl, menu_color_labels_msg
+  .labels_not_color:
+  ld de, $870
+  call vwfDrawLabels
+
+  ; turn on the PPU
+  xor a
+  ldh [rBGP], a
+  ldh [rIF], a
+  ld a, LCDCF_ON
+  ldh [rLCDC], a
+  ld a, IEF_VBLANK
+  ldh [rIE], a
+  ei
+
+  .loop:
+    call read_pad
+    ld b, PADF_UP|PADF_DOWN|PADF_LEFT|PADF_RIGHT
+    call autorepeat
+    ldh a, [hNewKeys]
+    ld b, a
+    bit PADB_START, b
+    jr z, .no_instructions
+      ld hl, instructions_msg
+    .do_instructions_and_restart:
+      call do_instructions
+    .restart1:
+      jp restart
+    .no_instructions:
+    bit PADB_B, b
+    jr z, .no_blank
+      ld hl, 0
+      jr .do_instructions_and_restart
+    .no_blank:
+    bit PADB_A, b
+    jr z, .no_run
+      call run_test
+      jr .restart1
+    .no_run:
+
+    call get_minimum_cursor_y
+
+    ; Recognize up and down to move cursor
+    ld a, [wCursorY]
+    ld c, a
+    ; B: buttons pressed; C: current Y; D: minimum Y
+    bit PADB_UP, b
+    jr z, .not_up
+      ld a, d
+      cp c  ; CF=1 if min Y < current Y
+      jr nc, .not_up
+      dec c
+    .not_up:
+    bit PADB_DOWN, b
+    jr z, .not_down
+      ld a, c
+      cp NUM_MENU_ITEMS - 1
+      jr nc, .not_down
+      inc c
+    .not_down:
+    ld a, c
+    ld [wCursorY], a
+
+    ; Prepare to modify the value
+    add c
+    add c  ; A = low(offset into value_ranges)
+    add low(value_ranges)
+    ld l, a
+    adc high(value_ranges)
+    sub l
+    ld h, a  ; H points to list of min, max(SGB/GBC), max(DMG)
+    ld a, c
+    add low(hRedLevel)
+    ld c, a
+    bit PADB_LEFT, b
+    jr z, .not_left
+      ldh a, [c]
+      cp [hl]
+      jr c, .no_writeback
+      dec a
+      jr .writeback
+    .not_left:
+    inc hl
+    bit PADB_RIGHT, b
+    jr z, .not_right
+      ldh a, [hCapability]
+      or a
+      jr nz, :+
+        inc hl
+      :
+      ldh a, [c]
+      cp [hl]
+      jr nc, .no_writeback
+      inc a
+    .writeback:
+      ldh [c], a
+      ld a, 1
+      ld [wDirtyColor], a
+    .not_right:
+    .no_writeback:
+
+    ; Draw arrow cursor
+    ld hl, oam_used
+    ld l, [hl]
+    ld a, [wCursorY]
+    add a
+    add a
+    add a
+    add (8 * MENU_Y) + 16  ; Y
+    ld [hl+], a
+    ld a, 8+8  ; X
+    ld [hl+], a
+    ld a, $0D  ; tile
+    ld [hl+], a
+    xor a
+    ld [hl+], a
+    ld a, l
+    ld [oam_used], a
+
+    ; TODO: recognize left and right to change value
+    ; TODO: update color
+    ; TODO: recognize A for run
+
+    ; Push everything to video memory
+    ld a, [wDirtyColor]
+    or a
+    call nz, calc_pal01
+    ld hl, wSGBCooldown
+    ld a, [hl]
+    or a
+    jr z, :+
+      dec a
+      ld [hl], a
+    :
+    call lcd_clear_oam
+    xor a
+    ld [oam_used], a
+    rst wait_vblank_run_dma
+    ld a, [wDirtyColor]
+    or a
+    call nz, update_color
+    ld a, LCDCF_ON|LCDCF_BGON|LCDCF_OBJON|LCDCF_BG8000
+    ldh [rLCDC], a
+    jp .loop
+
+do_instructions:
+  push hl
+  call lcd_off
+  ld h, $0A
+  call clear_scrn0_to_h
+  pop hl
+  ld de, $820
+  ld a, h
+  or l
+  call nz, vwfDrawLabels
+  ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8000
+  ldh [rLCDC], a
+  ei
+  .loop:
+    halt
+    call read_pad
+    ldh a, [hNewKeys]
+    or a
+    jr z, .loop
+  ret
+
+sensor_target_border_side:
+  ld a, $0C
+  ld de, 32
+  ld b, 7
+  .loop:
+    ld [hl], a
+    add hl, de
+    dec b
+    jr nz, .loop
+  ret
+
+;;
+; Gets the Y position of the first menu item valid for this machine.
+; (DMG doesn't have red or green rows.)
+; @return D minimum value for wCursorY
+get_minimum_cursor_y:
+  ld d, DMG_FIRST_MENU_ITEM
+  ldh a, [hCapability]
+  or a
+  jr z, .minY2
+    ld d, 0
+  .minY2:
+  ret
+
+
+GRAY_COLOR = $421 * 21
+;;
+; Fills help_line_buffer with a PAL01 packet containing
+; background color, inverse background color, target color, and gray
+calc_pal01:
+  ld hl, help_line_buffer
+  ld a, $01  ; PAL01
+  ld [hl+], a
+  ldh a, [hBgLevel]
+  cp 1
+  sbc a
+  cpl
+  ld [hl+], a  ; 0: background color
+  ld [hl+], a
+  cpl
+  ld [hl+], a  ; 1: inverse background color
+  ld [hl+], a
+
+  ldh a, [hBlueLevel]
+  ld d, a
+  ldh a, [hRedLevel]
+  ld e, a
+  ldh a, [hGreenLevel]
+  add a
+  add a
+  add a
+  add a
+  rl d
+  add a
+  rl d
+  or e
+  ld [hl+], a
+  ld a, d
+  ld [hl+], a
+  ld a, low(GRAY_COLOR)
+  ld [hl+], a
+  ld a, high(GRAY_COLOR)
+  ld [hl+], a
+  ld c, 7
+  xor a
+  rst memset_tiny
+  ret
+
+update_color:
+  call get_minimum_cursor_y
+  .dloop:
+    ld hl, (_SCRN0 >> 5) + MENU_Y
+    ld a, d
+    add l
+    ld l, a
+    add hl, hl
+    add hl, hl
+    add hl, hl
+    add hl, hl
+    add hl, hl
+    ld a, d
+    cp 3
+    sbc a
+    and RGB_ROWS_X^BGREP_ROWS_X
+    xor BGREP_ROWS_X
+    add l
+    ld l, a
+    ld a, d
+    add low(hRedLevel)
+    ld c, a
+    ld a, d
+    cp 3
+    ; Reg map: HL = destination address; [$FF00+C]: data;
+    ; ZF: 1 for Background or 0 for digits
+    jr nz, .d_is_number
+      ldh a, [c]
+      or a
+      jr z, :+
+        ld a, BGLEVEL_NAME_WIDTH
+      :
+      add BGLEVEL_NAME_TILE
+      ld [hl+], a
+      inc a
+      ld [hl+], a
+      inc a
+      jr .d_last_write
+      ld [hl+], a
+    .d_is_number:
+      ldh a, [c]
+      cp 10
+      jr nc, .d_greater_than_ten
+        ld [hl], $0a
+        inc l
+        ld [hl], $0a
+        inc l
+        jr .d_last_write
+      .d_greater_than_ten:
+        call bcd8bit_baa
+        ld c, a
+        ld a, b
+        and %00000011
+        jr nz, :+
+          ld a, $0A
+        :
+        ld [hl+], a
+        ld a, c
+        swap a
+        and %00001111
+        ld [hl+], a
+        ld a, c
+        and %00001111
+      .d_last_write:
+      ld [hl], a
+    .dcontinue
+    inc d
+    ld a, d
+    cp NUM_MENU_ITEMS
+    jr c, .dloop
+  ; all this so far is about half of vblank
+  ldh a, [rLY]
+
+  ldh a, [hCapability]
+  add a
+  jr nc, .do_non_gbc
+    ld a, $80
+    ld hl, help_line_buffer+1
+    lb bc, 8, low(rBCPS)
+    call set_gbc_palette
+    ld a, $82
+    ld hl, help_line_buffer+3
+    lb bc, 8, low(rOCPS)
+    call set_gbc_palette
+    xor a
+    ld [wDirtyColor], a
+    ret
+  
+  .do_non_gbc:
+  jr nz, .do_sgb
+    ; For DMG, the target color is Blue.
+    ldh a, [hBlueLevel]
+    swap a
+    or %01000011
+    ld b, a
+    ldh a, [hBgLevel]
+    or a
+    jr z, :+
+      ld a, $0F
+    :
+    xor b
+    jr .have_bgp
+  .do_sgb:
+    ld hl, wSGBCooldown
+    ld a, [hl]
+    or a
+    ret nz
+    ld [hl], SGB_COOLDOWN_FRAMES
+    ld hl, help_line_buffer
+    call sgb_send_one
+    xor a
+    ld [wDirtyColor], a
+    ld a, %11100100
+  .have_bgp:
+    ldh [rBGP], a
+    ldh [rOBP0], a
+    ret
+
+; minimum + 1, maximum, maximum on DMG
+section "value_ranges", ROM0
+value_ranges:
+  db 1, 31, 0
+  db 1, 31, 0
+  db 1, 31, 3
+  db 1, 1, 1
+  db 2, 240, 240
+
+
+section "CHR_src", ROM0
+main_chr:
+  dw .end-.start
+.start:
+  incbin "obj/gb/chr16.2bpp"
+.end:
+
+section "nonsgb_msg", ROM0
+def COPRSYMBOL equ $7F
+def LF equ $0A
+nonsgb_msg:
+  db 16, 16, "afterglow", LF
+  db 16, 32, "This software must be", LF
+  db 16, 40, "used on Super Game Boy", LF
+  db 16, 48, "or Game Boy Color.", 0
+
+section "instructions_msg", ROM0
+instructions_msg:
+  db 16,  0, "Use this to measure how long",LF
+  db 16,  8, "a TV keeps giving off light",LF
+  db 16, 16, "after the input goes dark.",LF
+  db 16, 32, "After 120 frames of",LF
+  db 16, 40, "background to give time to",LF
+  db 16, 48, "start measurement, these",LF
+  db 16, 56, "repeat until a press:",LF
+  db 24, 64, "5 sync (inverted background)",LF
+  db 24, 72, "60 background",LF
+  db 24, 80, "5 the chosen color",LF
+  db 24, 88, "240 background",LF
+  db 16,104, "Caution: Super Game Boy",LF
+  db 16,112, "drops a lot of frames.",LF
+  db 16,128, "Concept by zeta0134",0
+
+section "menu_msg", ROM0
+menu_msg:
+  ; Preinit the "Black" and "White" strings at tiles
+  ; $20-$22 and $23-$25
+  db  72, 56,"Black",LF
+  db  72, 56,"White",LF
+  db  88,  8,COPRSYMBOL," 2023",LF
+  db  88, 16,"Damian Yerrick",LF
+  db 104, 32,"A: run",LF
+  db 104, 40,"B: blank",LF
+  db 104, 48,"Start: help",LF
+  db  16, 56,"Background",LF
+  db  16, 64,"Repetitions",LF
+  db  42,136,"Point sensor here",0
+
+menu_color_labels_msg:
+  db  16, 32,"Red",LF
+  db  16, 40,"Green",LF
+  db  16, 48,"Blue",0
+menu_dmg_labels_msg:
+  db  16, 48,"Shade",0
+
+; Test operation ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+section "run_test", ROM0
+
+def hRepsLeft equ hLocals+0
+
+run_test:
+  call calc_pal01
+  call lcd_off
+  ld h, $0A
+  call clear_scrn0_to_h
+  ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8000
+  ldh [rLCDC], a
+
+  lb bc, 120, 0  ; time to start equipment
+  call color_c_wait_b
+  ret c
+  ldh a, [hRepetitionCount]
+  .reps_loop:
+    ldh [hRepsLeft], a
+    
+    lb bc, 5, 1  ; Sync
+    call color_c_wait_b
+    ret nz
+    lb bc, 60, 0  ; BG (short settle)
+    call color_c_wait_b
+    ret nz
+    lb bc, 5, 2  ; Chosen color
+    call color_c_wait_b
+    ret nz
+    lb bc, 240, 0  ; BG (long
+    call color_c_wait_b
+    ret nz
+    
+    ldh a, [hRepsLeft]
+    dec a
+    jr nz, .reps_loop
+  ret
+
+color_c_wait_b:
+  ldh a, [hCapability]
+  add a
+  ld a, c
+  ; CF true for SGB, CF false ZF false for SGB,
+  ; CF false ZF true for DMG
+  jr nc, .is_not_gbc
+    add a
+    add low(help_line_buffer+1)
+    ld l, a
+    adc high(help_line_buffer+1)
+    sub l
+    ld h, a
+    push bc
+    push hl
+    call wait_vblank_irq
+    pop hl
+    ld a, $80
+    lb bc, 2, low(rBCPS)
+    call set_gbc_palette
+    pop bc
+    dec b
+    ret z
+    jr .no_bgp
+  .is_not_gbc:
+  jr nz, .have_bgp
+    ; SGB: Use C as is
+    ; DMG: Look up bg, inverted bg, or sync
+    ldh a, [hBlueLevel]
+    bit 1, c
+    jr nz, .have_bgp
+    ld a, c
+    ldh a, [hBgLevel]  ; bit 0: 0 for black bg, 1 for white bg
+    xor c  ; bit 0: 0 for black bg or sync on white bg, 1 otherwise
+    rra
+    sbc a  ; FF for black bg or sync on white bg, 00 otherwise
+  .have_bgp:
+    ldh [rBGP], a
+  .no_bgp:
+
+  .loop:
+    push bc
+    call read_pad
+    call wait_vblank_irq
+    pop bc
+    ldh a, [hNewKeys]
+    or a
+    ret nz
+    dec b
+    jr nz, .loop
+  ret
+
+; memcpy and friends ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+section "HRAMCODE_src", ROM0
+;;
+; The routine gets copied to high RAM.  While OAM DMA is running,
+; both ROM and WRAM are inaccessible; only HRAM is readable.
+; But unlike on the NES, the CPU continues to fetch and execute
+; instructions.  So a program needs to run 160 mcycles' worth of
+; code from HRAM until this finishes.  To present a display list,
+; the program calls run_dma.
+hramcode_LOAD:
+  dw hramcode_RUN_end-hramcode_RUN
+load "HRAMCODE", HRAM
+hramcode_RUN:
+
+run_dma::
+  ld a,SOAM >> 8
+  ldh [rDMA],a
+hram_wait160::
+  ld a,40
+.loop:
+  dec a
+  jr nz,.loop
+  ret
+
+hramcode_RUN_end:
+endl

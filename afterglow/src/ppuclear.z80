@@ -1,0 +1,262 @@
+;
+; Basic LCD routines for Game Boy
+;
+; Copyright 2018 Damian Yerrick
+; 
+; This software is provided 'as-is', without any express or implied
+; warranty.  In no event will the authors be held liable for any damages
+; arising from the use of this software.
+; 
+; Permission is granted to anyone to use this software for any purpose,
+; including commercial applications, and to alter it and redistribute it
+; freely, subject to the following restrictions:
+; 
+; 1. The origin of this software must not be misrepresented; you must not
+;    claim that you wrote the original software. If you use this software
+;    in a product, an acknowledgment in the product documentation would be
+;    appreciated but is not required.
+; 2. Altered source versions must be plainly marked as such, and must not be
+;    misrepresented as being the original software.
+; 3. This notice may not be removed or altered from any source distribution.
+;
+include "src/hardware.inc"
+
+section "irqvars",HRAM
+; Used for bankswitching BG CHR RAM
+hVblanks:: ds 1
+
+; Shadow OAM is a display list that gets copied using DMA to OAM
+; after every frame in which sprites moved.
+section "ram_ppuclear",WRAM0,ALIGN[8]
+SOAM:: ds 160
+oam_used:: ds 1  ; How much of the display list is used
+
+SECTION "vblank_handler", ROM0[$0040]
+  push af
+  ldh a, [hVblanks]
+  inc a
+  ldh [hVblanks], a
+  pop af
+  reti
+
+; VisualBoyAdvance 1.7 requires a handler for all interrupts
+; enabled in rIE, even those used only during di halt
+SECTION "stat_handler", ROM0[$0048]
+  reti
+
+; A lot of this file is broken into little tiny sections, one for
+; each routine, so that the linker can squeeze them into tiny holes
+; between aligned or fixed-address sections
+
+SECTION "lcd_off", ROM0
+;;
+; Waits for blanking and turns off rendering.
+;
+; The Game Boy PPU halts entirely when rendering is off.  Stopping
+; the signal outside vblank confuses the circuitry in the LCD panel,
+; causing it to get stuck on a scanline.  This stuck state is the
+; same as the dark horizontal line when you turn off the Game Boy.
+;
+; Turning rendering on, by contrast, can be done at any time and
+; is done by writing the nametable base addresses and sprite size
+; to rLCDC with bit 7 set to true.
+lcd_off::
+  call busy_wait_vblank
+
+  ; Use a RMW instruction to turn off only bit 7
+  ld hl, rLCDC
+  res 7, [hl]
+  ret
+
+SECTION "wait_vblank_irq", ROM0[$10]
+;;
+; Waits for the vblank ISR to increment the count of vertical blanks.
+; Will lock up if DI, vblank IRQ off, or LCD off.
+; Clobbers A, HL
+wait_vblank_irq::
+  ld hl, hVblanks
+  ld a, [hl]
+  jr wait_vblank_irq_tail
+
+section "wait_vblank_run_dma", ROM0[$18]
+wait_vblank_run_dma::
+  rst wait_vblank_irq
+  jp run_dma
+wait_vblank_irq_tail:
+  halt
+  nop
+  cp [hl]
+  jr z, wait_vblank_irq_tail
+  ret
+
+SECTION "busy_wait_vblank", ROM0
+
+;;
+; Waits for forced blank (rLCDC bit 7 clear) or vertical blank
+; (rLY >= 144).  Use before VRAM upload (if interrupts aren't
+; set up yet) or before clearing rLCDC bit 7.
+busy_wait_vblank::
+  ; If rLCDC bit 7 already clear, we're already in forced blanking
+  ldh a,[rLCDC]
+  rlca
+  ret nc
+
+  ; Otherwise, wait for LY to become 144 through 152.
+  ; Most of line 153 is prerender, during which LY reads back as 0.
+.wait:
+  ldh a, [rLY]
+  cp 144
+  jr c, .wait
+  ret
+
+SECTION "rom_ppuclear", ROM0
+
+;;
+; Moves sprites in the display list from SOAM+[oam_used] through
+; SOAM+$9C offscreen by setting their Y coordinate to 0, which is
+; completely above the screen top (16).
+lcd_clear_oam::
+  ; Destination address in shadow OAM
+  ld hl, oam_used
+  ld a, [hl]
+  and $FC
+  ld l,a
+
+  ; iteration count
+  rrca
+  rrca
+  add 256 - 40
+  ld c,a
+
+  xor a
+.rowloop:
+  ld [hl+],a
+  inc l
+  inc l
+  inc l
+  inc c
+  jr nz, .rowloop
+  ret
+
+load_full_nam::
+  ld bc,256*20+18
+;;
+; Copies a B column by C row tilemap from HL to screen at DE.
+load_nam::
+  push bc
+  push de
+  .byteloop:
+    ld a,[hl+]
+    ld [de],a
+    inc de
+    dec b
+    jr nz,.byteloop
+
+  ; Move to next screen row
+  pop de
+  ld a,32
+  add e
+  ld e,a
+  jr nc,.no_inc_d
+    inc d
+  .no_inc_d:
+
+  ; Restore width; do more rows remain?
+  pop bc
+  dec c
+  jr nz,load_nam
+  ret
+
+section "memset", ROM0
+clear_scrn0_to_0::
+  ld h, 0
+clear_scrn0_to_h::
+  ld de,_SCRN0
+  ld bc,32*32
+  ; fall through to memset
+
+;;
+; Writes BC bytes of value H starting at DE.
+memset::
+  ; Increment B if C is nonzero
+  dec bc
+  inc b
+  inc c
+  ld a, h
+.loop:
+  ld [de],a
+  inc de
+  dec c
+  jr nz,.loop
+  dec b
+  jr nz,.loop
+  ret
+
+section "memset_tiny",ROM0[$08]
+;;
+; Writes C bytes of value A starting at HL.
+memset_tiny::
+  ld [hl+],a
+  dec c
+  jr nz,memset_tiny
+  ret
+
+section "memset_inc",ROM0
+;;
+; Writes C bytes of value A, A+1, ..., A+C-1 starting at HL.
+memset_inc::
+  ld [hl+],a
+  inc a
+  dec c
+  jr nz,memset_inc
+  ret
+
+section "memcpy", ROM0
+
+;;
+; Copy a string preceded by a 2-byte length from HL to DE.
+; @param HL source address
+; @param DE destination address
+memcpy_pascal16::
+  ld a, [hl+]
+  ld c, a
+  ld a, [hl+]
+  ld b, a
+  ; fall through to memcpy
+
+;;
+; Copies BC bytes from HL to DE.
+; @return A: last byte copied; HL at end of source;
+; DE at end of destination; B=C=0
+memcpy::
+  ; Increment B if C is nonzero
+  dec bc
+  inc b
+  inc c
+.loop:
+  ld a, [hl+]
+  ld [de],a
+  inc de
+  dec c
+  jr nz,.loop
+  dec b
+  jr nz,.loop
+  ret
+
+section "set_gbc_palette", ROM0
+;;
+; Loads native GBC palette data.
+; @param A offset into palette memory (0, 8, 16, ..., 56) plus $80
+; @param B number of bytes to copy: 8 times number of subpalettes
+; @param C palette port to write: LOW(rBCPS) or LOW(rOCPS)
+; @param HL data source
+; @return HL at end, C increased by 1, B = 0, DE unchanged
+set_gbc_palette::
+  ld [$FF00+c],a
+  inc c
+.loop:
+  ld a,[hl+]
+  ld [$FF00+c],a
+  dec b
+  jr nz,.loop
+  ret
