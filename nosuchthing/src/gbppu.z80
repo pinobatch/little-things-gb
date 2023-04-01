@@ -34,11 +34,8 @@
   rlca
   ret nc
 
-  ; Otherwise, wait for rLCDC to become 144 (not 145) because rLY=0
-  ; represents both the prerender line and the first visible line.
-  ; This differs from Super NES, where the first visible line is 1,
-  ; and NES, which has a post-render line numbered 240 between
-  ; picture and vblank.
+  ; Otherwise, wait for LY to become 144 through 152.
+  ; Most of line 153 is prerender, during which LY reads back as 0.
 wait:
   ldh a, [rLY]
   cp 144
