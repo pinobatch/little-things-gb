@@ -12,7 +12,7 @@ rgbasm -ho obj/gb/pads.o src/pads.z80
 rgbasm -ho obj/gb/ppuclear.o src/ppuclear.z80
 rgbasm -ho obj/gb/sgb.o src/sgb.z80
 rgbasm -ho obj/gb/bcd.o src/bcd.z80
-rgblink -dto afterglow.gb -n afterglow.sym \
+rgblink -dto afterglow.gb -n afterglow.sym -p 0xff \
   obj/gb/main.o obj/gb/vwfdraw.o obj/gb/vwflabels.o obj/gb/vwf7.o \
   obj/gb/pads.o obj/gb/sgb.o obj/gb/ppuclear.o obj/gb/bcd.o
-rgbfix -jvscl 0x33 -t 'AFTERGLOW' afterglow.gb
+rgbfix -jvscl 0x33 -t 'AFTERGLOW' -p 0xff afterglow.gb
