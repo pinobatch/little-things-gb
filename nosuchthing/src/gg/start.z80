@@ -279,7 +279,11 @@ ggmain:
   ld hl,PaletteData
   ld b,(PaletteDataEnd-PaletteData)
   otir
+  ; clear nametable
   call vdp_clear_nt
+  ; clear sprite attribute table
+  inc d
+  call vmemset_256d
 
   ; Load CHR
   vdp_seek_tile 0
@@ -330,11 +334,13 @@ ggmain:
 
 ;;
 ; Copies a rectangular region of tilemap to the VDP.
+; Attributes are written as 0.
 ; @param B width of tilemap data in 8-pixel columns
 ; @param C height of tilemap data in 8-pixel rows
 ; @param DE top left corner of destination in VRAM ($7800-$7EFF)
 ; @param HL start of source data, 1 byte per column
-; @return DE below the bottom left corner; HL at next; B unchanged; C=0
+; @return DE below the bottom left corner; HL at next; B unchanged;
+; A=C=0
 .proc vdp_load_nam
   push bc
   ld a, e
