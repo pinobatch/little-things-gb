@@ -3,7 +3,7 @@ The story
 
 Once upon a time, three anthropomorphic brown bears (call them
 Papa, Mama, and Cubby) lived in a cottage in the woods.  A
-primary-school-age girl with curly blonde hair was exploring park
+primary-school-age girl with long blonde hair was exploring park
 trails in her area when she got lost and ended up on a trail spur
 to the bears' cottage.  Finding the door not securely locked, she
 "broke in", making herself at home while she got her head together.
@@ -14,7 +14,9 @@ mess of the place, tasting their meals and eating all of Cubby's,
 disturbing the chairs and breaking Cubby's, disturbing the bed
 coverings.  They discovered the culprit lying in (you guessed it)
 Cubby's bed and chased her out.  After their nerves settled, Papa
-asked the others if he was too harsh.
+asked the others if he was too harsh.  Mama told Papa that she'd
+heard the story of Scrapefoot but never imagined she'd see it
+play out in her own house.
 
 A week later, the bears saw the girl in the park, and Cubby managed
 to approach and exchange apologies with the girl, who said she goes
@@ -23,8 +25,10 @@ isn't the only thing about him that's too hot.  Papa and Mama were
 willing to forgive and forget the whole thing for the cost of a
 replacement chair.  Gradually, Cubby and Goldilocks became friends.
 
+![INT. BEARS' COTTAGE - DAY: Goldilocks seated in the middle of the floor, with three anthropomorphic bears standing to the side of her. Shadows cast by sun through window in back. The smallest bear says "just right!"](./all3bears.png)
+
 Which brings us to today:  Goldilocks has been invited to the bears'
-house for a play date.
+house for a play date, so long as she arrives at the right time.
 
 The test results
 ----------------
