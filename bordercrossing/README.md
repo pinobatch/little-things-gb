@@ -5,6 +5,10 @@ This is a tool to create your own Super Game Boy border to use in a
 Game Boy game.  Load a border, then reset the flash cartridge or
 hot-swap to the game you want to play.
 
+[<img alt="Game Boy game displayed in a custom border on a TV, with Dr. Mario Game Pak in Super Game Boy in Super NES Control Deck" src="docs/First_successful_swap.jpg" width="640" height="480">](docs/First_successful_swap.jpg)
+First successful swap from Border Crossing to Dr. Mario, using the
+Redmond 98 theme
+
 A few sample borders are included.  These include the flags of
 countries that border GitHub's home country and a few iconic computer
 operating systems' window decorations.

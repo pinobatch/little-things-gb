@@ -19,7 +19,7 @@
 ; 3. This notice may not be removed or altered from any source distribution.
 ;
 
-CHRRAM0 equ $8000
+def CHRRAM0 equ $8000
 
 section "pb16temp", HRAM
 pb16_byte0: ds 1

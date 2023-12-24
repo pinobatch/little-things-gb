@@ -23,9 +23,9 @@
 include "src/hardware.inc"
 
 ; debug: show where canvas is not yet replaced
-SHOW_UNINITED_CANVAS equ 0
-PAGE_MAX_HEIGHT equ 7
-PAGE_LR_AMOUNT equ PAGE_MAX_HEIGHT - 1
+def SHOW_UNINITED_CANVAS equ 0
+def PAGE_MAX_HEIGHT equ 7
+def PAGE_LR_AMOUNT equ PAGE_MAX_HEIGHT - 1
 
 section "teststate", WRAM0
 wCursorY::    ds 1

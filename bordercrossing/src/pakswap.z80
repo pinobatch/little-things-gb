@@ -95,6 +95,7 @@ wait_for_pakswap::
   call sgb_unfreeze
   ld a, %11100100
   ldh [rBGP], a
+  call wait_vblank_irq
   di
   jp wait_for_pakswap_tail
 
@@ -162,11 +163,13 @@ pakswap_wram_LOAD:
 load "PakSwap_WRAMCODE", WRAM0
 pakswap_wram_RUN:
 
-rom_header_title equ $0134
-SIZEOF_HEADER_TITLE equ 15
-SIZEOF_SGB_PACKET equ 16
-rom_gbc_flag equ $0143  ; >$80: GBC
-rom_sgb_flag equ $0146  ; $03: SGB
+def rom_header_title equ $0134
+def SIZEOF_HEADER_TITLE equ 15
+def SIZEOF_SGB_PACKET equ 16
+def rom_gbc_flag equ $0143  ; >$80: GBC
+def rom_sgb_flag equ $0146  ; $03: SGB
+def logo_constant_addr equ $0106
+def LOGO_CONSTANT_VALUE equ $66
 
 wSGBDisablePacket:
   db $0E << 3 | 1  ; ICON_EN
@@ -183,8 +186,8 @@ wait_for_pakswap_wram:
   ld [$99F3], a
 
   ; check if inserted
-  ld a, [$106]
-  cp $66
+  ld a, [logo_constant_addr]
+  cp LOGO_CONSTANT_VALUE
   jr z, .is_inserted
     ld a, PADF_START|PADF_A
     ; ldh [hAndInstruction+1], a
