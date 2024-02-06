@@ -56,6 +56,7 @@ reset:
   xor a
   ldh [hCurKeys], a
   ldh [hCapability], a
+  ldh [hVblanks], a
   ld c, 160
   ld hl, wShadowOAM
   rst memset_tiny
@@ -65,14 +66,13 @@ reset:
   call sgb_wait
   call sgb_wait
   call sgb_wait
-  ld b, b
   call detect_sgb
   jp main
 
 section "lcd_off", ROM0
 ;;
 ; If LCD is on, busy waits for vblank and turns LCD off
-lcd_off:
+lcd_off::
   ; Skip loop if LCD is already off
   ldh a, [rLCDC]
   add a
