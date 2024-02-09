@@ -19,6 +19,16 @@ hCapability:: ds 1
 
 section "int_state", HRAM
 hVblanks: ds 1
+hTimerMid: ds 1
+hTimerHi: ds 1
+hPressTimeLo: ds 1
+hPressTimeMid: ds 1
+hPressTimeHi: ds 1
+hPressOccurred: ds 1
+hPressRingBufferIndex: ds 1
+
+section "presses", WRAM0, ALIGN[2]
+hPresses: ds PRESS_BUFFER_COUNT * SIZEOF_PRESS_BUFFER_ENTRY
 
 section "stack", WRAM0, ALIGN[1]
 wStack: ds 64
@@ -53,19 +63,52 @@ reset:
   ldh [hInitialNR52], a
   ld sp, wStackTop
 
+  ; Everything is all nice and saved now.  We can initialize the
+  ; test's state machine.
+  ld a, TACF_65KHZ
+  ldh [rTAC], a
   xor a
+  ldh [rBGP], a  ; blank the Nintendo logo without turning off LCD
   ldh [hCurKeys], a
-  ldh [hCapability], a
+  ldh [hCapability], a  ; to fill later during SGB detection
   ldh [hVblanks], a
+  ldh [hTimerMid], a
+  ldh [hTimerHi], a
+  ldh [hPressOccurred], a
   ld c, 160
   ld hl, wShadowOAM
   rst memset_tiny
+  ld c, PRESS_BUFFER_COUNT * SIZEOF_PRESS_BUFFER_ENTRY
+  ld hl, hPresses
+  rst memset_tiny
+  ldh [rTMA], a
+  ldh [rTIMA], a
+  or TACF_START
+  ldh [rTAC], a
+
+  ; TODO: collect presses of the Start Button here
+  ld a, P1F_GET_BTN
+  ldh [rP1], a
+  xor a
+  ldh [rIF], a
+  ld a, IEF_VBLANK|IEF_TIMER|IEF_HILO
+  ld [rIE], a
+  ei
+  .start_loop:
+    halt
+    ldh a, [hVblanks]
+    cp 60
+    jr c, .start_loop
+  ld a, IEF_VBLANK|IEF_TIMER
+  ld [rIE], a
+  ld a, P1F_GET_NONE
+  ldh [rP1], a
+
   call lcd_off
   call load_initial_font
-  call sgb_wait
-  call sgb_wait
-  call sgb_wait
-  call sgb_wait
+
+  ; Now that we've provided ample time for Start Button test to run,
+  ; NOW we detect the Super Game Boy
   call detect_sgb
   jp main
 
@@ -201,6 +244,8 @@ wait_vblank_irq::
   jr z, .wait
   ret
 
+; apparently the busy wait is used by the SGB driver's freeze and
+; unfreeze routines; I'll need to see if it's even necessary
 SECTION "busy_wait_vblank", ROM0
 
 ;;
@@ -340,3 +385,56 @@ lcd_clear_oam::
   inc c
   jr nz, .rowloop
   ret
+
+
+SECTION "timer_handler", ROM0[$0050]
+; Called when TIMA wraps
+timer_handler:
+  push af
+  ldh a, [hTimerMid]
+  add 1
+  ldh [hTimerMid], a
+  ldh a, [hTimerHi]
+  adc 0
+  ldh [hTimerHi], a
+  pop af
+  reti
+
+SECTION "joy_handler", ROM0[$0060]
+; Untested!
+joy_handler:
+  push af
+  ldh a, [rTIMA]  ; initial TIMA read
+  ldh [hPressTimeLo], a
+  add a  ; save bit 7 of the timer value
+  ldh a, [hTimerHi]
+  ldh [hPressTimeHi], a
+  ldh a, [hTimerMid]
+  ldh [hPressTimeMid], a
+
+  ; If TIMA wrapped in the roughly 12-cycle window between the button
+  ; press and the initial TIMA read, the timer interrupt won't have
+  ; incremented rTimerMid and rTimerHi yet.  If TIMA bit 7 was true
+  ; in the initial read, this won't have happened.
+  jr c, .wrapDidNotOccur
+
+  ; If a timer interrupt occurred since the start of the joypad
+  ; interrupt handler, the timer bit in IF will be true.  (It can't
+  ; have wrapped from FF to 00 after the initial read because that
+  ; would have caused the initial read to have bit 7 true.)
+  ldh a, [rIF]
+  and IEF_TIMER
+  jr z, .wrapDidNotOccur
+    ld b, b
+    ldh a, [hPressTimeMid]
+    add 1
+    ldh [hPressTimeMid], a
+    ldh a, [hPressTimeHi]
+    adc 0
+    ldh [hPressTimeHi], a
+  .wrapDidNotOccur:
+
+  ld a, 1
+  ldh [hPressOccurred], a
+  pop af
+  reti

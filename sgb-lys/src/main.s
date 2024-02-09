@@ -265,24 +265,24 @@ rise_time_result_labels:
 todo_labels:
   dwxy 0, 0
   db "To do:", 10
-  dwxy 0, 1
-  db "1.measure P1 rise", 10
-  dwxy 2, 2
-  db "time by holding A", 10
-  dwxy 0, 3
-  db "2.measure time", 10
-  dwxy 2, 4
+  dwxy 0, 2
+  db "1.measure time", 10
+  dwxy 2, 3
   db "between repeated", 10
+  dwxy 2, 4
+  db "button presses", 10
   dwxy 2, 5
-  db "A presses and", 10
+  db "and compare to", 10
   dwxy 2, 6
-  db "compare to nominal", 10
+  db "nominal video", 10
   dwxy 2, 7
   db "frame length", 10
-  dwxy 0, 8
-  db "3.measure time of", 10
-  dwxy 2, 9
-  db "first Start press", 0
+  dwxy 0, 9
+  db "2.measure time of", 10
+  dwxy 2, 10
+  db "early button", 10
+  dwxy 2, 11
+  db "presses", 0
 
 initial_reg_list:
   db $A0,low(hInitialA)
