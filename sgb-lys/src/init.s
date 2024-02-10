@@ -18,17 +18,17 @@ hInitialSP::  ds 2
 hCapability:: ds 1
 
 section "int_state", HRAM
-hVblanks: ds 1
+hVblanks:: ds 1
 hTimerMid: ds 1
 hTimerHi: ds 1
-hPressTimeLo: ds 1
-hPressTimeMid: ds 1
-hPressTimeHi: ds 1
-hPressOccurred: ds 1
-hPressRingBufferIndex: ds 1
+hPressTimeLo:: ds 1
+hPressTimeMid:: ds 1
+hPressTimeHi:: ds 1
+hPressOccurred:: ds 1
+hPressRingBufferIndex:: ds 1
 
 section "presses", WRAM0, ALIGN[2]
-hPresses: ds PRESS_BUFFER_COUNT * SIZEOF_PRESS_BUFFER_ENTRY
+wPresses:: ds PRESS_BUFFER_COUNT * SIZEOF_PRESS_BUFFER_ENTRY
 
 section "stack", WRAM0, ALIGN[1]
 wStack: ds 64
@@ -65,8 +65,6 @@ reset:
 
   ; Everything is all nice and saved now.  We can initialize the
   ; test's state machine.
-  ld a, TACF_65KHZ
-  ldh [rTAC], a
   xor a
   ldh [rBGP], a  ; blank the Nintendo logo without turning off LCD
   ldh [hCurKeys], a
@@ -75,41 +73,14 @@ reset:
   ldh [hTimerMid], a
   ldh [hTimerHi], a
   ldh [hPressOccurred], a
+  ldh [hPressRingBufferIndex], a
   ld c, 160
   ld hl, wShadowOAM
   rst memset_tiny
   ld c, PRESS_BUFFER_COUNT * SIZEOF_PRESS_BUFFER_ENTRY
-  ld hl, hPresses
+  ld hl, wPresses
   rst memset_tiny
-  ldh [rTMA], a
-  ldh [rTIMA], a
-  or TACF_START
-  ldh [rTAC], a
 
-  ; TODO: collect presses of the Start Button here
-  ld a, P1F_GET_BTN
-  ldh [rP1], a
-  xor a
-  ldh [rIF], a
-  ld a, IEF_VBLANK|IEF_TIMER|IEF_HILO
-  ld [rIE], a
-  ei
-  .start_loop:
-    halt
-    ldh a, [hVblanks]
-    cp 60
-    jr c, .start_loop
-  ld a, IEF_VBLANK|IEF_TIMER
-  ld [rIE], a
-  ld a, P1F_GET_NONE
-  ldh [rP1], a
-
-  call lcd_off
-  call load_initial_font
-
-  ; Now that we've provided ample time for Start Button test to run,
-  ; NOW we detect the Super Game Boy
-  call detect_sgb
   jp main
 
 section "lcd_off", ROM0
@@ -129,7 +100,7 @@ lcd_off::
   ret
 
 section "load_initial_font", ROM0
-load_initial_font:
+load_initial_font::
   ; convert 1bpp to 2bpp
   ld de, ascii_1b
   ld hl, $9100
@@ -169,34 +140,6 @@ stpcpy:
   or a
   jr nz, stpcpy_write
   dec hl
-  ret
-
-section "bcd8bit", ROM0
-;;
-; Converts an 8-bit value to 3 binary-coded decimal digits.
-; @param A the value
-; @return A: tens and ones digits; B[1:0]: hundreds digit;
-; B[7:2]: unspecified
-bcd8bit_baa::
-  swap a
-  ld b,a
-  and $0F  ; bits 3-0 in A, range $00-$0F
-  or a     ; for some odd reason, AND sets half carry to 1
-  daa      ; A=$00-$15
-
-  sla b
-  adc a
-  daa
-  sla b
-  adc a
-  daa      ; A=$00-$63
-  rl b
-  adc a
-  daa
-  rl b
-  adc a
-  daa
-  rl b
   ret
 
 section "draw_labels", ROM0

@@ -14,14 +14,14 @@ same rate as Super NES frames, with a constant rate of drift between
 Super NES and Game Boy frames so long as the LCD remains on.
 
 1. [Done] Display register values at program start time
-2. [To do] While holding the A Button, estimate P1 bit 0 rise time
+2. [Done] While holding the A Button, estimate P1 bit 0 rise time
    after deselecting the buttons half of the key matrix.
    This should be 0 on SGB and GBC and positive on DMG and MGB.
 3. [To do] Log frame count and LY of presses of the A Button, and
    compare to estimated frame counts.
-4. [To do] Slow motion feature: if the Start Button is pressed before
+4. [Done] Slow motion feature: if the Start Button is pressed before
    the menu loads, display the frame count and LY of the first press
-   to establish initial phase.  Check for this during the half-second
+   to establish initial phase.  Check for this during a 1-second
    pause before sending `MLT_REQ` to detect SGB.
 
 Estimates of each SGB variant's input period:
