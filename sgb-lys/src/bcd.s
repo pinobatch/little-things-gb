@@ -1,3 +1,9 @@
+;;
+; Binary to decimal conversion and other calculations related to
+; displaying numbers
+
+def WITH_DIV_TEST equ 0
+
 section "bcd8bit", ROM0
 ;;
 ; Converts an 8-bit value to 3 binary-coded decimal digits.
@@ -28,7 +34,7 @@ bcd8bit_baa::
 
 section "bcd24bit", ROM0
 ;;
-; Converts a 24-bit binary value to decimal.
+; Converts a 24-bit binary value to decimal in about 380 cycles.
 ; @param HL pointer to a little-endian value
 ; @return BCDE value in BCD, A=B, L=0, H unchanged
 bcd24bit::
@@ -97,3 +103,87 @@ bcd24bit::
   daa
   ld b, a
   ret
+
+section "div24by16", ROM0
+
+;;
+; Produces a digit of the decimal expansion of proper fraction HL/DE
+; by intertwining multiplication by 10 and division by DE.
+; Two calls yield a percentage.
+; @param HL numerator; must be less than DE
+; @param DE denominator
+; @return A quotient of of division 10*HL/DE; HL: remainder
+pctdigit16::
+  ; BCA = HL0 * 0.25
+  ld b, h
+  ld c, l
+  xor a
+  sra b
+  rr c
+  rra
+  sra b
+  rr c
+  rra
+  ; HL = HL * 25
+  add hl, bc
+  ld c, a  ; A is decimal portion of multiplication by HL
+  ld b, $1F  ; collects 4 output bits: this and 3 doublings
+  jr div24by16.already_doubled
+
+;;
+; Divides HLC by DE
+; produced correct results with 234567/23456 and 234567/2345
+; @param HLC numerator, where HL < DE
+; @param DE denominator
+; @return A: quotient; HL: remainder; DE unchanged
+div24by16::
+  ld b, $01  ; collects 8 output bits; when CF set, loop is over
+  .bitloop:
+    sla c
+    rl l
+    rl h
+  .already_doubled:
+    jr c, .yes_greater
+    ld a, l
+    sub e
+    ld a, h
+    sbc d
+    jr c, .not_greater
+    .yes_greater:
+      ld a, l
+      sub e
+      ld l, a
+      ld a, h
+      sbc d
+      ld h, a
+      or a  ; clear CF
+    .not_greater:
+    rl b
+    jr nc, .bitloop
+  ld a, b
+  cpl
+  ret
+
+if WITH_DIV_TEST
+div_test::
+  ld hl, 234567 >> 8
+  ld c, low(234567)
+  ld de, 2345
+  call div24by16  ; expect 100 remainder 67
+
+  ld hl, 23456 >> 8
+  ld c, low(23456)
+  ld de, 2345
+  call div24by16  ; expect 10 remainder 6
+
+  ld hl, 234567 >> 8
+  ld c, low(234567)
+  ld de, 23456
+  call div24by16  ; expect 10 remainder 7
+
+  ld hl, 2323
+  ld de, 3366
+  call pctdigit16  ; expect 6 remainder 3034
+  call pctdigit16  ; expect 9 remainder 46
+  ret
+endc

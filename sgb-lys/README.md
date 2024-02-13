@@ -88,23 +88,32 @@ MGB, and the Control Pad can have more rise time than the buttons.
 ### 3. Frame period
 
 Repeatedly press the A, B, or Start Button.  The program watches for
-and displays the exact time of each press, in units of 64 T-states
-(nominally 1/65536 second).  On handhelds, some releases also count
-as presses because the buttons bounce for a few microseconds when
-they make or break contact.
+presses and displays the exact time of each of the last 7, in units
+of 64 T-states (nominally 1/65536 second).  On handhelds, some
+releases also count as presses because the buttons bounce for a few
+microseconds when they make or break contact.  To clear the history,
+wait 1 second before the next press.
 
-Press the Select Button to calculate the SGB's frame period by
-looking for patterns in the timing of the last few presses.
-It uses an algorithm based on the median of approximate greatest
-common divisors.  This won't give a meaningful result on a handheld.
+Once you have at least 3 press times, press the Select Button to
+calculate the SGB's frame period by looking for patterns in the
+timing of the last few presses.  It uses an algorithm based on the
+median of approximate greatest common divisors.  Caveats:
+
+- Frame period estimation is more resistant to subharmonic errors
+  with at least 5 presses.
+- The detection thresholds are set for SGB's roughly 60 Hz update
+  rate, not the allegedly faster polling of the Game Boy Player
+  accessory for Nintendo GameCube.  Nor will it give a meaningful
+  result on a handheld.
 
 Status
 ------
 
-Everything through "rise time" is in the ROM.  The AGCD algorithm has
-been prototyped in Python.  These remain to be built in the ROM:
+Everything through displaying press times is in the ROM.  The AGCD
+algorithm has been prototyped in Python and ported to SM83 assembly.
+Actions past the Select Button remain to be built in the ROM:
 
-1. Draw the presses to the screen
-2. Calculate times between successive presses and pairwise AGCDs
-   between those times
-3. Display the AGCD and the predicted timestamp for each frame
+1. Calculate durations between each press and the two before it
+2. Calculate up to 55 pairwise AGCDs between those times
+3. Sort pairwise AGCDs
+4. Display the AGCD and the estimated frame count for each timestamp

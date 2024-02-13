@@ -247,6 +247,10 @@ section "memcpy", ROM0
 
 ;;
 ; Copies BC bytes from HL to DE.
+; Source and destination may overlap if DE < HL.
+; @param HL source address
+; @param DE destination address
+; @param BC byte count
 ; @return A: last byte copied; HL at end of source;
 ; DE at end of destination; B=C=0
 memcpy::

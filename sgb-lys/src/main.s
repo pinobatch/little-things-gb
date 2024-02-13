@@ -11,20 +11,22 @@ hRiseDownNone: ds 1
 def MAX_EARLY_PRESSES_TO_DRAW equ 7
 def EARLY_PRESSES_TOP_Y equ 8
 def EARLY_PRESSES_FRAMES equ 80
+def PRESSES_TOP_Y equ 2
 
 section "main", ROM0
 main::
+
   ; Phase 1: Collect early presses of the Start Button for a second.
   ; This runs with timer, vblank, and joypad interrupts turned on.
   call set_interrupts_for_collect
-  .start_loop:
+  .collect_early_presses_loop:
     halt
     ldh a, [hPressRingBufferIndex]
     cp MAX_EARLY_PRESSES_TO_DRAW
     call c, collect_press
     ldh a, [hVblanks]
     cp EARLY_PRESSES_FRAMES
-    jr c, .start_loop
+    jr c, .collect_early_presses_loop
   call end_interrupts_for_collect
 
   ; Now that we've provided ample time for Start Button test to run,
@@ -44,9 +46,9 @@ main::
   or a
   jr z, .no_early_presses
     cp MAX_EARLY_PRESSES_TO_DRAW
-    jr c, .presses_loop
+    jr c, .draw_early_presses_loop
       ld a, MAX_EARLY_PRESSES_TO_DRAW
-    .presses_loop:
+    .draw_early_presses_loop:
       dec a
       push af
       ld b, a
@@ -55,7 +57,7 @@ main::
       call draw_press_b_to_row_c
       pop af
       or a
-      jr nz, .presses_loop
+      jr nz, .draw_early_presses_loop
     ld hl, initial_presses_labels
   .no_early_presses:
   call draw_labels
@@ -97,11 +99,69 @@ main::
   call wait_A_press
 
   call lcd_off
+  ld hl, mash_prompt_labels
+  call cls_draw_labels
+  call lcd_on
+  call set_interrupts_for_collect
+
+  .collect_presses_loop:
+    halt
+    call collect_press
+    jr z, .collect_presses_loop
+
+    ; If Select is pressed, and there are at least 4 presses
+    ; (3 previous presses and the Select Button itself), calculate
+    ldh a, [rP1]
+    and PADF_SELECT
+    jr nz, .not_select
+      ldh a, [hPressRingBufferIndex]
+      cp 4
+      jr nc, .calculate_timing
+    .not_select:
+
+    ; Otherwise, discard outdated presses and draw the kept ones
+    call discard_old_press
+    ld b, 0
+    .draw_presses_loop:
+      ld a, b
+      add PRESSES_TOP_Y
+      ld c, a
+      ldh a, [hPressRingBufferIndex]
+      dec a  ; A = last press to draw
+      sub b
+      push bc
+      jr c, .draw_presses_blank
+        call draw_press_b_to_row_c
+        jr .draw_presses_continue
+      .draw_presses_blank:
+        call draw_no_press_to_row_c
+      .draw_presses_continue:
+      pop bc
+      inc b
+      ld a, b
+      cp PRESS_BUFFER_COUNT - 1
+      jr c, .draw_presses_loop
+    jr .collect_presses_loop
+
+  .calculate_timing:
+  call end_interrupts_for_collect
+  ; Discard the Select press because it's probably late
+  ld hl, hPressRingBufferIndex
+  dec [hl]
+
+  ; TODO: Collect delta times, calculate AGCDs, and sort them
+  ; to find the median
+
+  call lcd_off
+
+  ; TODO: Display result of calculation
+
   ld hl, todo_labels
   call cls_draw_labels
   call lcd_on
-  
+
 .forever:
+  halt
   jr .forever
 
 
@@ -149,6 +209,9 @@ end_interrupts_for_collect:
   ldh [rP1], a
   ret
 
+;;
+; Collect a press
+; @return ZF false if a press occurred
 collect_press::
   ld a, [hPressOccurred]
   or a
@@ -188,6 +251,63 @@ collect_press::
   ld hl, hPressRingBufferIndex
   inc [hl]
   ret
+
+;;
+; If the last 2 presses are more than a second apart, discard all but
+; the last.  If there are more than N-1 presses, discard the oldest.
+discard_old_press:
+  ldh a, [hPressRingBufferIndex]
+  sub 2  ; Previous press index A; current press index A+1
+  ret c  ; Do nothing if only 1 press in buffer
+
+  rept LOG_SIZEOF_PRESS_BUFFER_ENTRY
+    add a
+  endr
+  add low(wPresses)
+  ld e, a
+  adc high(wPresses)
+  sub e
+  ld d, a
+  ld hl, SIZEOF_PRESS_BUFFER_ENTRY
+  add hl, de  ; DE: previous press; HL: latest press
+  ld a, [de]
+  ld b, a
+  ld a, [hl+]
+  sub b
+  inc de
+  ld a, [de]
+  ld b, a
+  ld a, [hl+]
+  sbc b
+  inc de
+  ld a, [de]
+  ld b, a
+  ld a, [hl]
+  sbc b
+  jr z, .diff_less_than_1s
+    ; It's been more than a second.  Move this press to the start
+    ; of the buffer.
+    ld a, [hl-]
+    ld [wPresses+2], a
+    ld a, [hl-]
+    ld [wPresses+1], a
+    ld a, [hl]
+    ld [wPresses+0], a
+    ld a, 1
+    ldh [hPressRingBufferIndex], a
+    ret
+  .diff_less_than_1s:
+
+  ; If full, drop the oldest press
+  ldh a, [hPressRingBufferIndex]
+  cp PRESS_BUFFER_COUNT
+  ret c
+  dec a
+  ldh [hPressRingBufferIndex], a
+  ld hl, wPresses + SIZEOF_PRESS_BUFFER_ENTRY
+  ld de, wPresses
+  ld bc, SIZEOF_PRESS_BUFFER_ENTRY * (PRESS_BUFFER_COUNT - 1)
+  jp memcpy
 
 ; Measuring rise time ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -353,18 +473,7 @@ draw_press_b_to_row_c:
 ;     hhhhhhdddddddd
 draw_24bit_to_row_c:
   ; calculate destination address in VRAM
-  ld a, c
-  add a
-  add a
-  add a
-  inc a  ; indent by 4
-  ld e, a
-  ld d, _SCRN0>>10
-  add a
-  rl d
-  add a
-  rl d
-  ld e, a
+  call seek_vram_row_c
 
   ld a, [hl-]
   call hblank_put_a
@@ -452,6 +561,32 @@ hblank_put_bc::
   inc e
   ret
 
+seek_vram_row_c:
+  ld a, c
+  add a
+  add a
+  add a
+  inc a  ; indent by 4
+  ld e, a
+  ld d, _SCRN0>>10
+  add a
+  rl d
+  add a
+  rl d
+  ld e, a
+  ret
+
+draw_no_press_to_row_c:
+  call seek_vram_row_c
+  lb bc, " ", " "
+  ld l, 7
+  .loop:
+    call hblank_put_bc
+    dec l
+    jr nz, .loop
+  ret
+
+
 section "labels", ROM0
 
 initial_regs_labels:
@@ -533,6 +668,12 @@ rise_time_reg_list:
   db $CD,$01,low(hRiseDownA)
   db $ED,$01,low(hRiseDownNone)
   db $00
+
+mash_prompt_labels:
+  dwxy 3, 0
+  db "Keep mashing A!", 10
+  dwxy 2, 10
+  db "Select:calculate", 0
 
 todo_labels:
   dwxy 0, 0
