@@ -31,8 +31,8 @@ def SIZEOF_PRESS_BUFFER_ENTRY equ 1 << LOG_SIZEOF_PRESS_BUFFER_ENTRY
 ; last holds the time of the calculate command, which we discard.
 ; This means up to 11 delta times (0-5 vs. 1-6 and 0-4 vs. 2-6)
 ; get calculated and turned into AGCDs.
-def MAX_DELTA_TIMES (2 * PRESS_BUFFER_COUNT - 5)
-def MAX_AGCDS MAX_DELTA_TIMES * (MAX_DELTA_TIMES - 1) / 2
+def MAX_DELTA_TIMES equ (2 * PRESS_BUFFER_COUNT - 5)
+def MAX_AGCDS equ MAX_DELTA_TIMES * (MAX_DELTA_TIMES - 1) / 2
 
 ; CHR RAM is where tile shapes go
 def CHRRAM0  EQU $8000

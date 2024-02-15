@@ -113,7 +113,6 @@ Everything through displaying press times is in the ROM.  The AGCD
 algorithm has been prototyped in Python and ported to SM83 assembly.
 Actions past the Select Button remain to be built in the ROM:
 
-1. Calculate durations between each press and the two before it
-2. Calculate up to 55 pairwise AGCDs between those times
-3. Sort pairwise AGCDs
-4. Display the AGCD and the estimated frame count for each timestamp
+1. Heapify pairwise AGCDs
+2. Sort pairwise AGCDs
+3. Display the AGCD and the estimated frame count for each timestamp

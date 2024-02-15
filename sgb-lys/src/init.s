@@ -372,7 +372,6 @@ joy_handler:
   ldh a, [rIF]
   and IEF_TIMER
   jr z, .wrapDidNotOccur
-    ld b, b
     ldh a, [hPressTimeMid]
     add 1
     ldh [hPressTimeMid], a

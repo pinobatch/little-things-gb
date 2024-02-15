@@ -151,6 +151,8 @@ main::
 
   ; TODO: Collect delta times, calculate AGCDs, and sort them
   ; to find the median
+  call calculate_deltas
+  call calculate_agcds
 
   call lcd_off
 
