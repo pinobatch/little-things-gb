@@ -97,22 +97,25 @@ wait 1 second before the next press.
 Once you have at least 3 press times, press the Select Button to
 calculate the SGB's frame period by looking for patterns in the
 timing of the last few presses.  It uses an algorithm based on the
-median of approximate greatest common divisors.  Caveats:
+median of approximate greatest common divisors of differences
+between press times.
+
+Caveats:
 
 - Frame period estimation is more resistant to subharmonic errors
   with at least 5 presses.
 - The detection thresholds are set for SGB's roughly 60 Hz update
   rate, not the allegedly faster polling of the Game Boy Player
   accessory for Nintendo GameCube.  Nor will it give a meaningful
-  result on a handheld.
+  result on a handheld; you can tell because the quartiles will be
+  much farther apart.
 
 Status
 ------
 
-Everything through displaying press times is in the ROM.  The AGCD
-algorithm has been prototyped in Python and ported to SM83 assembly.
-Actions past the Select Button remain to be built in the ROM:
+I'd like to display these:
 
-1. Heapify pairwise AGCDs
-2. Sort pairwise AGCDs
-3. Display the AGCD and the estimated frame count for each timestamp
+- First quartile, median, and third quartile of estimates
+- Delta ticks from oldest press
+- Delta ticks from oldest press divided by median estimate
+  (for ticks in the past 256 frames)

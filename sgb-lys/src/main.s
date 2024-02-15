@@ -145,18 +145,23 @@ main::
 
   .calculate_timing:
   call end_interrupts_for_collect
+
   ; Discard the Select press because it's probably late
   ld hl, hPressRingBufferIndex
   dec [hl]
 
-  ; TODO: Collect delta times, calculate AGCDs, and sort them
-  ; to find the median
+  ; Collect delta times, calculate AGCDs, and sort them
+  xor a
+  ldh [rBGP], a
   call calculate_deltas
   call calculate_agcds
+  call heapsort_agcds
 
+  ; Use the median of these as the nominal frame length.
+  ; Print the results
   call lcd_off
 
-  ; TODO: Display result of calculation
+  ; TODO: Divide all deltas by median frame length and print them
 
   ld hl, todo_labels
   call cls_draw_labels
@@ -679,16 +684,24 @@ mash_prompt_labels:
 
 todo_labels:
   dwxy 0, 0
+  db "Median period:",10
+  dwxy 0, 1
+  db "Quartiles:    0-",10
+  dwxy 3, 3
+  db "Delta   Frame",10
+  dwxy 7, 4
+  db "0    0.00",10
+  dwxy 0, 9
   db "To do:", 10
-  dwxy 0, 2
-  db "1.measure time", 10
-  dwxy 2, 3
+  dwxy 0, 11
+  db "1.display time", 10
+  dwxy 2, 12
   db "between repeated", 10
-  dwxy 2, 4
+  dwxy 2, 13
   db "button presses", 10
-  dwxy 2, 5
+  dwxy 2, 14
   db "and compare to", 10
-  dwxy 2, 6
+  dwxy 2, 15
   db "nominal video", 10
-  dwxy 2, 7
+  dwxy 2, 16
   db "frame length", 0

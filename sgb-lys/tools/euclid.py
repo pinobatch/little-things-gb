@@ -41,7 +41,7 @@ def get_agcd(diff1, diff2, epsilon):
             diff2 -= diff1
     return max(diff1, diff2) + min(diff1, diff2) // 2
 
-def calc_likely_period(timestamps, ideal_period):
+def calc_likely_period(timestamps, ideal_period, print_agcds=False):
     """Find the period from observed timestamps.
 
 Model:
@@ -76,7 +76,15 @@ Model:
     ]
 
     # Take the median of what's left
+    if print_agcds:
+        # Print an assembly language test vector
+        print("dw " + ", ".join(str(x) for x in agcds))
     agcds.sort()
+
+    if print_agcds:
+        # Print a hex dump of the memory afterward
+        print(agcds)
+        print("".join("%02X %02X " % (x & 0xFF, x >> 8) for x in agcds))
     return agcds[len(agcds) // 2]
 
 IDEAL_FRAME_PERIOD = 70224//64

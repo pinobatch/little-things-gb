@@ -2,6 +2,7 @@ include "src/global.inc"
 
 def AGCD_EPSILON = 512
 def WITH_AGCD_TEST equ 0
+def WITH_HEAPSORT_TEST equ 0
 
 section "deltacounts", HRAM
 hNumDeltas:: ds 1
@@ -9,12 +10,24 @@ hNumAGCDs:: ds 1
 
 section "deltas", WRAM0, ALIGN[1]
 wDeltasToUse: ds 2 * MAX_DELTA_TIMES
-wAGCDs: ds 2 * MAX_AGCDS
 
+; calc84maniac suggested aligning wAGCDs to a $0100-byte boundary
+; to simplify heap traversal during sorting:
+;
+;     it's most ideal if you can place the heap in an aligned
+;     location where you can shift the LSB directly to move up
+;     and down the binary tree
+;
+; This brought to mind how I traverse the Y and XT subtables
+; of shadow OAM on Master System.
+section "agcds", WRAM0, ALIGN[8]
+wAGCDs: ds 2 * MAX_AGCDS
+assert 2 * MAX_AGCDS < $100
 
 section "approximate_gcd", ROM0
 
 if WITH_AGCD_TEST
+approximate_gcd_test::
   ld de, 2240
   ld hl, 5537
   jr approximate_gcd
@@ -165,7 +178,6 @@ try_append_one_delta:
 ;;
 ; Calculates AGCD values of all pairwise combinations of deltas.
 calculate_agcds::
-  ld b, b
   xor a
   ldh [hNumAGCDs], a
   ld b, a
@@ -221,13 +233,11 @@ calculate_agcds::
         ret nc  ; Reject all remaining values if full
         inc [hl]
         add a
-        add low(wAGCDs)
+        assert low(wAGCDs) == 0
         ld l, a
-        adc high(wAGCDs)
-        sub l
-        ld h, a
+        ld h, high(wAGCDs)
         ld [hl], e
-        inc hl
+        inc l
         ld [hl], d
       .reject:
 
@@ -244,60 +254,154 @@ calculate_agcds::
     jr nc, .bloop
   ret
 
-
-if 0
 ;;
-; Sorts hNumAGCDs by increasing value
+; Sorts values in wAGCDs[:hNumAGCDs] by increasing value
 heapsort_agcds::
   ldh a, [hNumAGCDs]
   ld c, a
-  sra a
-  ret z  ; fewer than 2 elements are sorted
-  ld b, a
+  and $7E  ; A = middle of array in bytes
+  ret z  ; fewer than 2 elements are already sorted
+  ld h, high(wAGCDs)
+  ld l, a  ; HL: pointer to current element
+  sla c  ; HC: pointer to end of array
+
   .heapify_loop:
-    dec b
+    dec l
+    dec l
+    push hl
     call heapsort_sift
-    ld a, b
+    pop hl
+    ld a, l
     or a
-    jr nz, .loop
+    jr nz, .heapify_loop
 
   dec c
+  dec c
   .heappop_loop:
-    ; Swap first element with last
-    ld de, wAGCDs
-    ld l, c
-    ld h, 0
-    add hl, hl
-    add hl, de  ; DE points to first element and HL to last
-    rept 2
-      ld a, [de]
-      ld b, a
-      ld a, [hl]
-      ld [de], a
-      ld a, b
-      ld [hl+], a
-    endr
-    ld b, 0
+    ; C is index of last element. Swap it with the first
+    ld hl, wAGCDs
+    ld b, h
+    ld d, [hl]
+    ld a, [bc]
+    ld [hl+], a
+    ld a, d
+    ld [bc], a
+    inc c
+    ld d, [hl]
+    ld a, [bc]
+    ld [hl-], a
+    ld a, d
+    ld [bc], a
+    dec c
+    ld l, 0
     call heapsort_sift
+    dec c
     dec c
     jr nz, .heappop_loop
   ret
 
 ;;
-; Ensures element B of the first C elements is not greater than
-; elements 2B+1 and 2B+2
+; Ensures element at HL not greater than the elements at
+; H{2L+2} and H{2L+4}.  Otherwise, swap with greater of the two
+; and repeat from there.
+; @param C offset in bytes of end of list
 heapsort_sift:
-  ld a, b
-  add a  ; stop if B>127
-  ret c
-  inc a
+  ld b, l  ; index of largest element
+  ld e, [hl]
+  inc l
+  ld d, [hl]  ; DE = value of largest element
+
+  sla l  ; L = 2L+2
+  ret c  ; if past $100 then sift is done
+  ld a, l
   cp c
-  ret nc  ; stop if 2B+1 >= c
-  
-  ld 
-  
+  ret nc  ; if past end of list then sift is done
+  ld a, e  ; If DE < [2L+2] then set 2L+2 as swap target
+  sub [hl]
+  inc l
+  ld a, d
+  sbc [hl]
+  jr nc, .lchild_not_greater
+    dec l
+    ld b, l
+    ld e, [hl]
+    inc l
+    ld d, [hl]
+  .lchild_not_greater:
+
+  inc l  ; L = 2L+4; can be a swap target only if within the list
+  jr z, .rchild_not_greater  ; if past $100 then skip
+  ld a, l
+  cp c
+  jr nc, .rchild_not_greater  ; if past end of list then skip
+  ld a, e  ; If DE < [2L+4] then set 2L+4 as swap target
+  sub [hl]
+  inc l
+  ld a, d
+  sbc [hl]
+  dec l
+  jr nc, .rchild_not_greater
+    ld b, l
+    ld e, [hl]
+    inc l
+    ld d, [hl]
+    dec l
+  .rchild_not_greater:
+
+  ; L = 2L+4, DE = greatest value of 3, HB points to greatest
+  ; seek back to first and compare
+  dec l
+  dec l
+  sra l
+  dec l  ; L = L
+  ld a, l
+  xor b
+  ret z  ; If head is greatest then sift is done
+
+  ; Move [HL] to [HB] and DE to [HL], then re-sift from HB
+  push bc
+  ld c, b
+  ld b, h
+  ld a, [hl]
+  ld [bc], a
+  ld a, e
+  ld [hl+], a
+  inc c
+  ld a, [hl]
+  ld [bc], a
+  ld a, d
+  ld [hl], a
+  pop bc
+  ld l, b
+  jr heapsort_sift
+
+if WITH_HEAPSORT_TEST
+heapsort_test::
+  ld a, (geeksforgeeks_test_data.end - geeksforgeeks_test_data)/2
+  ld hl, geeksforgeeks_test_data
+  call .one_test
+  ld a, (actual_test_data.end - actual_test_data)/2
+  ld hl, actual_test_data
+.one_test:
+  ldh [hNumAGCDs], a
+  ld de, wAGCDs
+  add a
+  ld c, a
+  ld b, 0
+  call memcpy
+  ld b, b
+  call heapsort_agcds
+  ld b, b
   ret
-endc  
-  
-; TODO: Heapify kept AGCDs
-; TODO: Heap pop n/2 AGCDs to find the median
+
+geeksforgeeks_test_data:
+  ; dataset from https://www.geeksforgeeks.org/heap-sort/
+  dw 12, 11, 13, 5, 6, 7
+.end
+actual_test_data:
+  ; dataset from my SGB
+  ; timestamps = [6754, 16890, 23644, 30398, 38269, 46155, 54036]
+  dw 1086, 1132, 1151, 1125, 1126, 1127, 1132, 1065, 1080, 1148, 1145, 1120, 1143, 1143, 1126, 1113, 1123, 1123, 1169, 1117, 1128, 1132, 1118, 1127, 1143, 1143, 1126, 1113, 1123, 1123, 1143, 1086, 1075, 1031, 1098
+.end
+
+endc
