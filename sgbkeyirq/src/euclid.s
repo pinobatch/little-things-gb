@@ -1,6 +1,6 @@
 include "src/global.inc"
 
-def AGCD_EPSILON = 512
+def AGCD_EPSILON = 70224/128  ; nominally half a frame
 def WITH_AGCD_TEST equ 0
 def WITH_HEAPSORT_TEST equ 0
 
@@ -21,7 +21,7 @@ wDeltasToUse: ds 2 * MAX_DELTA_TIMES
 ; This brought to mind how I traverse the Y and XT subtables
 ; of shadow OAM on Master System.
 section "agcds", WRAM0, ALIGN[8]
-wAGCDs: ds 2 * MAX_AGCDS
+wAGCDs:: ds 2 * MAX_AGCDS
 assert 2 * MAX_AGCDS < $100
 
 section "approximate_gcd", ROM0
@@ -222,8 +222,8 @@ calculate_agcds::
         ld d, a
         sbc high(AGCD_EPSILON * 3)
         jr c, .no_halve
-          sra e
-          rr d
+          sra d
+          rr e
         .no_halve:
 
         ; Append GCD value

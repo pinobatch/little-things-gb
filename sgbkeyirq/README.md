@@ -1,5 +1,5 @@
-SGB Key IRQ Test
-================
+SGB Key IRQ Timing
+==================
 
 This test, a sequel to Telling LYs, is intended to more precisely
 characterize timing behavior of the Super Game Boy (SGB) accessory's
@@ -10,14 +10,13 @@ Background
 
 Game Boy (DMG), Game Boy pocket (MGB), and Game Boy Color (GBC)
 systems (collectively GB) contain a system on chip (SoC) comprising
-an 8-bit central processing unit (CPU), a programmable sound
-generator (PSG), timers, and a picture processing unit (PPU)
-that reads video memory and generates a picture signal.  While the
-display is on, the PPU sends a line every 456 cycles, and it sends
-144 lines of picture followed by 10 lines of vertical blanking period
-("vblank") for a total of 154 lines.  The frame period, or the time
-from the start of one vblank to the start of the next, is thus
-456 times 154 or 70224 dots.
+an 8-bit central processing unit (CPU), timers, a picture processing
+unit (PPU) that reads video memory and generates a picture signal,
+and other components.  While the display is on, the PPU produces a
+line every 456 cycles, and it sends 144 lines of picture followed by
+10 lines of vertical blanking period ("vblank") for a total of 154
+lines.  The frame period, or the time from the start of one vblank
+to the start of the next, is thus 456 times 154 or 70224 dots.
 
 GB has eight keys: four buttons and four Control Pad directions.
 The player can press or release these at any time, and the running
@@ -103,19 +102,88 @@ between press times.
 Caveats:
 
 - Frame period estimation is more resistant to subharmonic errors
-  with at least 5 presses.
+  with at least 5 presses within 1 second.
 - The detection thresholds are set for SGB's roughly 60 Hz update
   rate, not the allegedly faster polling of the Game Boy Player
   accessory for Nintendo GameCube.  Nor will it give a meaningful
   result on a handheld; you can tell because the quartiles will be
   much farther apart.
 
-Status
-------
+Results
+-------
 
-I'd like to display these:
+Tested using GB-LIVE32, a USB EPROM emulator by Gekkio that does
+not display a menu before starting the game.  Console is a 1/1/1 US
+Super NES; controller is asciiPad.
 
-- First quartile, median, and third quartile of estimates
-- Delta ticks from oldest press
-- Delta ticks from oldest press divided by median estimate
-  (for ticks in the past 256 frames)
+### Super Game Boy 
+
+NTSC Super Game Boy
+```
+SGB   1  AF 0100  SP FFFE
+BC 0014  DE 0000  HL C060
+LY    0  DIV  D8  NR52 F0
+```
+
+Early press times
+
+* Hold A: 5371
+* Hold B, Y, Select, or Start: 45935
+* Slow motion: 48205, 55005, 59443, 64051, 69667, 75287, 80931
+
+Super Game Boy 2
+```
+SGB   1  AF FF00  SP FFFE
+BC 0014  DE 0000  HL C060
+LY    0  DIV  D8  NR52 F0
+```
+
+Early press times
+
+* Hold A: 5566
+* Hold B, Y, Select, or Start: 45172
+* Slow motion: 45171, 49496, 54031, 60491, 65063, 70549, 76041
+
+Measured rise time: all 0
+
+### Handhelds
+
+Game Boy
+```
+SGB   0  AF 01B0  SP FFFE
+BC 0013  DE 00D8  HL 014D
+LY    0  DIV  AB  NR52 F1
+```
+
+Measured rise time
+
+* A to Down: 1 us
+* A to none: 1 us
+* Down to A: 3 us
+* Down to none: 3 us
+
+Game Boy pocket
+```
+SGB   0  AF FFB0  SP FFFE
+BC 0013  DE 00D8  HL 014D
+LY    0  DIV  AB  NR52 F1
+```
+
+Measured rise time
+
+* A to Down: 0 us
+* A to none: 0 us
+* Down to A: 2 us
+* Down to none: 2 us
+
+Game Boy Color
+```
+SGB   0  AF 1180  SP FFFE
+BC 0000  DE 0008  HL 007C
+LY  148  DIV  26  NR52 F1
+```
+
+Measured rise time: all 0
+
+Game Boy Advance results are the same as Game Boy Color, except that
+BC is 0100.

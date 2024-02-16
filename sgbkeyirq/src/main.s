@@ -1,3 +1,5 @@
+; SGB Key IRQ test: main
+
 include "src/hardware.inc"
 include "src/global.inc"
 
@@ -8,10 +10,15 @@ hRiseANone:    ds 1
 hRiseDownA:    ds 1
 hRiseDownNone: ds 1
 
+section "press_base_time", WRAM0
+wEarliestPressTime: ds 3
+
 def MAX_EARLY_PRESSES_TO_DRAW equ 7
 def EARLY_PRESSES_TOP_Y equ 8
 def EARLY_PRESSES_FRAMES equ 80
 def PRESSES_TOP_Y equ 2
+
+def WITH_TEST_TIMESTAMPS equ 0
 
 section "main", ROM0
 main::
@@ -95,9 +102,13 @@ main::
   ; Display results
   ld hl, rise_time_reg_list
   call draw_regs
+
   call lcd_on
   call wait_A_press
 
+.collect_again:
+  xor a
+  ldh [hPressRingBufferIndex], a
   call lcd_off
   ld hl, mash_prompt_labels
   call cls_draw_labels
@@ -150,6 +161,13 @@ main::
   ld hl, hPressRingBufferIndex
   dec [hl]
 
+if WITH_TEST_TIMESTAMPS
+  ld hl, test_timestamps
+  ld de, wPresses
+  ld bc, test_timestamps.end-test_timestamps
+  call memcpy
+endc
+
   ; Collect delta times, calculate AGCDs, and sort them
   xor a
   ldh [rBGP], a
@@ -160,17 +178,14 @@ main::
   ; Use the median of these as the nominal frame length.
   ; Print the results
   call lcd_off
-
-  ; TODO: Divide all deltas by median frame length and print them
-
-  ld hl, todo_labels
+  ld hl, estimation_result_labels
   call cls_draw_labels
+  call draw_press_deltas
   call lcd_on
-
-.forever:
-  halt
-  jr .forever
-
+  call read_pad
+  ld c, PADF_SELECT
+  call wait_c_press
+  jr .collect_again
 
 wait_A_press:
   ld c, PADF_A
@@ -389,8 +404,8 @@ lcd_on:
   xor a
   ldh [rSCX], a
   ldh [rIF], a
-  inc a
-  assert IEF_VBLANK == 1
+  ldh a, [rIE]
+  or IEF_VBLANK
   ldh [rIE], a
   ld a, -4
   ldh [rWY], a
@@ -481,6 +496,7 @@ draw_press_b_to_row_c:
 draw_24bit_to_row_c:
   ; calculate destination address in VRAM
   call seek_vram_row_c
+  set 2, e
 
   ld a, [hl-]
   call hblank_put_a
@@ -573,7 +589,6 @@ seek_vram_row_c:
   add a
   add a
   add a
-  inc a  ; indent by 4
   ld e, a
   ld d, _SCRN0>>10
   add a
@@ -585,6 +600,7 @@ seek_vram_row_c:
 
 draw_no_press_to_row_c:
   call seek_vram_row_c
+  set 2, e
   lb bc, " ", " "
   ld l, 7
   .loop:
@@ -593,6 +609,231 @@ draw_no_press_to_row_c:
     jr nz, .loop
   ret
 
+def DELTAS_TOP_ROW equ 4
+;;
+; Draw the analysis screen
+draw_press_deltas:
+  ; Draw median
+  ldxy hl, 16, 0
+  ldh a, [hNumAGCDs]
+  sra a
+  call draw_agcd_index_a
+  ldxy hl, 11, 1
+  ldh a, [hNumAGCDs]
+  sra a
+  sra a
+  call draw_agcd_index_a
+  ldxy hl, 16, 1
+  ldh a, [hNumAGCDs]
+  sra a
+  ld b, a
+  sra a
+  add b
+  call draw_agcd_index_a
+
+  ; Find the timestamp 256 frames before the latest press
+  ldh a, [hNumAGCDs]
+  and $7E
+  ld l, a
+  ld h, high(wAGCDs)
+  ld a, [hl+]
+  ld b, [hl]
+  ld c, a  ; BC = frame length; BC0 = 256 frames
+
+  ; Save the frame length
+  ld hl, help_line_buffer+8
+  ld [hl+], a
+  ld [hl], b
+
+  ldh a, [hPressRingBufferIndex]
+  rept LOG_SIZEOF_PRESS_BUFFER_ENTRY
+    add a
+  endr
+  add low(wPresses - SIZEOF_PRESS_BUFFER_ENTRY + 1)
+  ld l, a
+  adc high(wPresses - SIZEOF_PRESS_BUFFER_ENTRY + 1)
+  sub l
+  ld h, a
+  ld a, [hl+]
+  sub c
+  ld c, a
+  ld a, [hl]
+  sbc b
+  ld b, a  ; BC: bits 24-16 of 256 frames before last press
+  inc bc
+
+  ; Find the earliest press no more than 256 frames before the
+  ; latest press
+  ld hl, wPresses+1
+  ld e, 0  ; E is first to draw
+  .find256backloop:
+    ld a, [hl+]
+    sub c
+    ld a, [hl+]
+    sbc b
+    add a
+    jr nc, .have256back
+    rept SIZEOF_PRESS_BUFFER_ENTRY-2
+      inc hl
+    endr
+    inc e
+    jr nz, .find256backloop
+  .have256back:
+  dec hl
+  dec hl
+  dec hl
+  ld b, e
+  ld de, wEarliestPressTime
+  ld a, [hl+]
+  ld [de], a
+  inc de
+  ld a, [hl+]
+  ld [de], a
+  inc de
+  ld a, [hl+]
+  ld [de], a
+
+  ; wEarliestPressTime is the amount to subtract from each
+  ; timestamp to form the displayed differences.
+  ; Draw rows B through hNumPresses
+  ld c, DELTAS_TOP_ROW
+  .rowloop:
+    push bc
+
+    ; Calculate wPresses[b] - wEarliestPressTime
+    ld hl, wEarliestPressTime
+    ld e, [hl]
+    inc hl
+    ld d, [hl]
+    inc hl
+    ld c, [hl]
+
+    ld a, b
+    rept LOG_SIZEOF_PRESS_BUFFER_ENTRY
+      add a
+    endr
+    add low(wPresses)
+    ld l, a
+    adc high(wPresses)
+    sub l
+    ld h, a  ; HL points to press timestamp
+
+    ; Calculate and save the difference
+    ld a, [hl+]
+    sub e
+    ld [help_line_buffer+0], a
+    ld e, a
+    ld a, [hl+]
+    sbc d
+    ld d, a
+    ld [help_line_buffer+1], a
+    ld a, [hl]
+    sbc c
+    ld [help_line_buffer+2], a  ; difference in ADE
+
+    ; Divide the difference by a frame length
+    ld h, a
+    ld l, d
+    ld c, e
+    ld a, [help_line_buffer+8]
+    ld e, a
+    ld a, [help_line_buffer+9]
+    ld d, a
+    call div24by16
+    ld [help_line_buffer+3], a
+    call pctdigit16
+    ld [help_line_buffer+4], a
+    call pctdigit16
+    ld [help_line_buffer+5], a
+    pop bc
+    push bc
+    call seek_vram_row_c
+    set 1, e
+    push de  ; stack: VRAM destination, loop counters
+
+    ; Draw the delta
+    ld hl, help_line_buffer+0
+    call bcd24bit
+    pop hl  ; HL = VRAM destination; CDE = 6 digits
+    ld b, c
+    ld c, " "
+    ld a, b
+    swap a
+    call draw_agcd_index_a.pr1dig
+    ld a, b
+    call draw_agcd_index_a.pr1dig
+    call draw_agcd_index_a.prde
+
+    ; Draw the frame ratio
+    inc l
+    inc l
+    ld a, [help_line_buffer+3]
+    call bcd8bit_baa
+    ld e, a
+    ld a, b
+    and $03
+    ld d, a
+    ld c, " "
+    call draw_agcd_index_a.prde3
+    ld a, "."
+    ld [hl+], a
+    ld a, [help_line_buffer+4]
+    or "0"
+    ld [hl+], a
+    ld a, [help_line_buffer+5]
+    or "0"
+    ld [hl+], a
+
+    pop bc
+    inc c
+    inc b
+    ldh a, [hPressRingBufferIndex]
+    sub b
+    jp nz, .rowloop
+  ret
+
+draw_agcd_index_a:
+  push hl
+
+  ; Fetch wAGCDs[A]
+  add a
+  ld e, a
+  assert low(wAGCDs) == 0
+  ld d, high(wAGCDs)
+  ld a, [de]
+
+  ; Pad to 24 bits
+  ld [hl+], a
+  inc e
+  ld a, [de]
+  ld [hl+], a
+  xor a
+  ld [hl-], a
+  dec hl
+
+  call bcd24bit
+  pop hl
+  ld c, " "
+.prde:
+  ld a, d
+  swap a
+  call .pr1dig
+.prde3:
+  ld a, d
+  call .pr1dig
+  ld a, e
+  swap a
+  call .pr1dig
+  ld a, e
+  ld c, "0"
+.pr1dig:
+  and $0F
+  jr z, .nonzero
+    ld c, "0"
+  .nonzero:
+  or c
+  ld [hl+], a
+  ret
 
 section "labels", ROM0
 
@@ -682,26 +923,20 @@ mash_prompt_labels:
   dwxy 2, 10
   db "Select:calculate", 0
 
-todo_labels:
+estimation_result_labels:
   dwxy 0, 0
   db "Median period:",10
   dwxy 0, 1
   db "Quartiles:    0-",10
   dwxy 3, 3
   db "Delta   Frame",10
-  dwxy 7, 4
-  db "0    0.00",10
-  dwxy 0, 9
-  db "To do:", 10
-  dwxy 0, 11
-  db "1.display time", 10
-  dwxy 2, 12
-  db "between repeated", 10
+  dwxy 0, 12
+  db "Press Select Button",10
   dwxy 2, 13
-  db "button presses", 10
-  dwxy 2, 14
-  db "and compare to", 10
-  dwxy 2, 15
-  db "nominal video", 10
-  dwxy 2, 16
-  db "frame length", 0
+  db "to sample again", 0
+
+if WITH_TEST_TIMESTAMPS
+test_timestamps:
+  dl 6754, 16890, 23644, 30398, 38269, 46155, 54036
+.end
+endc

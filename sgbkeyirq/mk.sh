@@ -8,6 +8,6 @@ rgbasm -o obj/gb/euclid.o src/euclid.s
 rgbasm -o obj/gb/main.o src/main.s
 rgbasm -o obj/gb/sgb.o src/sgb.s
 rgbasm -o obj/gb/pads.o src/pads.s
-rgblink -dto sgb-lys.gb -n sgb-lys.sym -p 0xFF \
+rgblink -dto sgbkeyirq.gb -n sgbkeyirq.sym -p 0xFF \
   obj/gb/init.o obj/gb/bcd.o obj/gb/euclid.o obj/gb/main.o obj/gb/sgb.o obj/gb/pads.o
-rgbfix -jvsl 0x33 -t "SGB LY TEST" -k "P8" -p 0xFF sgb-lys.gb
+rgbfix -jvsl 0x33 -t "SGB KEY IRQ" -k "P8" -p 0xFF sgbkeyirq.gb

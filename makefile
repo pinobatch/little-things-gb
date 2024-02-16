@@ -3,7 +3,9 @@ binaries := \
   ca83/ca83.gb \
   firstwhite/firstwhite.gb \
   tellinglys/tellinglys.gb \
-  gbpng/gbpng.gb.png
+  gbpng/gbpng.gb.png \
+  sgbkeyirq/sgbkeyirq.gb \
+  nosuchthing/nosuchthing.gb
 
 .PHONY: all clean dist zip zip.in $(binaries)
 

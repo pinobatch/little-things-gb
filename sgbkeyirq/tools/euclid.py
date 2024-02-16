@@ -41,6 +41,14 @@ def get_agcd(diff1, diff2, epsilon):
             diff2 -= diff1
     return max(diff1, diff2) + min(diff1, diff2) // 2
 
+def hexdump_agcds(agcds):
+    print("dw " + ", ".join(str(x) for x in agcds))
+    for i in range(0, len(agcds), 8):
+        print("|".join(
+            " ".join("%02X %02X" % (x & 0xFF, x >> 8)
+                     for x in agcds[j:j + 4])
+            for j in range(i, min(len(agcds), i + 8), 4)))
+
 def calc_likely_period(timestamps, ideal_period, print_agcds=False):
     """Find the period from observed timestamps.
 
@@ -57,6 +65,9 @@ Model:
         for i, lower in enumerate(timestamps)
         for upper in timestamps[i + 1:i + 3]
     ]
+    if print_agcds:
+        print("all_diffs:")
+        print(" ".join("%04X" % d for d in all_diffs))
 
     # For each of the (n-2)(2n-3) pairs of differences, calculate
     # the AGCD with epsilon half of an ideal period
@@ -65,6 +76,10 @@ Model:
         for i, lower in enumerate(all_diffs)
         for upper in all_diffs[i + 1:]
     ]
+
+    if print_agcds:
+        print("unfiltered_agcds:")
+        hexdump_agcds(agcds)
 
     # Discard AGCDs exceeding 2.5 ideal periods and halve those
     # exceeding 1.5
@@ -77,14 +92,13 @@ Model:
 
     # Take the median of what's left
     if print_agcds:
-        # Print an assembly language test vector
-        print("dw " + ", ".join(str(x) for x in agcds))
+        print("unsorted_agcds:")
+        hexdump_agcds(agcds)
     agcds.sort()
 
     if print_agcds:
-        # Print a hex dump of the memory afterward
-        print(agcds)
-        print("".join("%02X %02X " % (x & 0xFF, x >> 8) for x in agcds))
+        print("sorted_agcds:")
+        hexdump_agcds(agcds)
     return agcds[len(agcds) // 2]
 
 IDEAL_FRAME_PERIOD = 70224//64
