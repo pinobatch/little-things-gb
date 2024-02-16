@@ -898,11 +898,11 @@ rise_time_result_labels:
   dwxy 1, 2
   db "Measured rise time", 10
   dwxy 1, 4
-  db "A to Down:    # us", 10
+  db "A to dirs:    # us", 10
   dwxy 1, 5
   db "A to none:    # us", 10
   dwxy 1, 6
-  db "Down to A:    # us", 10
+  db "Down to btns: # us", 10
   dwxy 1, 7
   db "Down to none: # us", 10
   dwxy 3, 12

@@ -72,7 +72,8 @@ to finish its startup process, it displays the initial conditions.
   whether or not the boot ROM played a ding
 - Whether the SGB system software responded to a packet to
   enable and disable controller 2
-- Times of button presses while waiting for the SGB to warm up
+- Times of button presses while waiting for the SGB to warm up,
+  which reflect initial phase between S-PPU and GB vblanks
 
 You can test the SGB's startup delay by holding or mashing the B or
 Start Button or using a controller's "slow motion" feature before
@@ -81,8 +82,29 @@ the result screen appears.
 ### 2. Rise time
 
 Press and release the A Button and then Down on the Control Pad
-to measure and display the rise time.  This differs between DMG and
-MGB, and the Control Pad can have more rise time than the buttons.
+to measure and display the rise time, or the time for input to
+settle after deselecting half of the key matrix.  For example,
+"Down to btns" means that while you hold Down on the Control Pad,
+the test will select the Control Pad, wait, select the buttons,
+and time how long it takes for the Down bit to return to 1.
+
+* A to dirs: Select buttons (P1=$10), wait,
+  select Control Pad (P1=$20), measure
+* A to none: Select buttons (P1=$10), wait,
+  select nothing (P1=$30), measure
+* Down to btns: Select Control Pad (P1=$20), wait,
+  select buttons (P1=$10), measure
+* Down to none: Select Control Pad (P1=$20), wait,
+  select nothing (P1=$30), measure
+
+Rise time is measured in units of 4 T-states (about 1 microsecond)
+and differs between DMG and MGB.  The Control Pad had a longer
+rise time than the buttons in units owned by the developer, and
+there was no time difference between selecting the other half
+and deselecting the entire matrix.
+
+This measures time to respond to changes in the select bits,
+not time when the player physically releases a key.
 
 ### 3. Frame period
 
@@ -97,7 +119,8 @@ Once you have at least 3 press times, press the Select Button to
 calculate the SGB's frame period by looking for patterns in the
 timing of the last few presses.  It uses an algorithm based on the
 median of approximate greatest common divisors of differences
-between press times.
+between press times.  It confirms the guess by displaying
+press times divided by that period.
 
 Caveats:
 
@@ -113,8 +136,9 @@ Results
 -------
 
 Tested using GB-LIVE32, a USB EPROM emulator by Gekkio that does
-not display a menu before starting the game.  Console is a 1/1/1 US
-Super NES; controller is asciiPad.
+not display a menu before starting the game.  Console is a 1/1/1
+US Super NES.  Controller is asciiPad, chosen for its turbo and
+slow motion features.
 
 ### Super Game Boy 
 
@@ -131,6 +155,11 @@ Early press times
 * Hold B, Y, Select, or Start: 45935
 * Slow motion: 48205, 55005, 59443, 64051, 69667, 75287, 80931
 
+Measured rise time: all 0
+
+Frame times should be close to 71473.2 / 64 = 1117 ticks.
+
+
 Super Game Boy 2
 ```
 SGB   1  AF FF00  SP FFFE
@@ -145,6 +174,8 @@ Early press times
 * Slow motion: 45171, 49496, 54031, 60491, 65063, 70549, 76041
 
 Measured rise time: all 0
+
+Frame times should be close to 69790.1 / 64 = 1090 ticks.
 
 ### Handhelds
 
@@ -187,3 +218,6 @@ Measured rise time: all 0
 
 Game Boy Advance results are the same as Game Boy Color, except that
 BC is 0100.
+
+Handhelds do not sample on vblank.  If they did, as some emulators
+do, the frame times would be close to 70224 / 64 = 1097 ticks.
