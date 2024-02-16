@@ -140,7 +140,7 @@ not display a menu before starting the game.  Console is a 1/1/1
 US Super NES.  Controller is asciiPad, chosen for its turbo and
 slow motion features.
 
-### Super Game Boy 
+### Super Game Boy
 
 NTSC Super Game Boy
 ```
@@ -188,9 +188,9 @@ LY    0  DIV  AB  NR52 F1
 
 Measured rise time
 
-* A to Down: 1 us
+* A to dirs: 1 us
 * A to none: 1 us
-* Down to A: 3 us
+* Down to btns: 3 us
 * Down to none: 3 us
 
 Game Boy pocket
@@ -202,9 +202,9 @@ LY    0  DIV  AB  NR52 F1
 
 Measured rise time
 
-* A to Down: 0 us
+* A to dirs: 0 us
 * A to none: 0 us
-* Down to A: 2 us
+* Down to btns: 2 us
 * Down to none: 2 us
 
 Game Boy Color

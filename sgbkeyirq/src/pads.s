@@ -66,7 +66,7 @@ read_pad::
   xor b    ; A = pressed buttons + directions
   ld b,a   ; B = pressed buttons + directions
 
-  ; And release the controller
+  ; Deselect both halves
   ld a,P1F_GET_NONE
   ldh [rP1],a
 

@@ -334,9 +334,13 @@ discard_old_press:
 ; Measuring rise time ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;
-; @param B which side to read (P1F_GET_BTN or P1F_GET_DPAD)
-; @param C which side to release (P1F_GET_BTN, P1F_GET_DPAD, or P1F_GET_NONE)
+; @param B which side to select for reading
+; (P1F_GET_BTN or P1F_GET_DPAD)
+; @param C which side to select when deselecting
+; (P1F_GET_BTN, P1F_GET_DPAD, or P1F_GET_NONE)
 measure_rise_time:
+  di  ; don't want timer interrupts interfering with measurement
+
   ; Measure once even
   push bc
   call .precharge_P1_with_B
@@ -349,9 +353,9 @@ measure_rise_time:
   ld h, [hl]
   call .sum_presses_to_l
   pop bc
-  push hl
 
   ; Measure once odd
+  push hl
   call .precharge_P1_with_B
   ld [hl], c
   nop
@@ -366,8 +370,10 @@ measure_rise_time:
   ldh [rP1], a
   ld a, l
   pop hl
+
+  ; Add even and odd measurements
   add l
-  ret
+  reti
 
 .precharge_P1_with_B:
   ; Precharge data lines with held button

@@ -6,8 +6,8 @@ section "sgb_detection", ROM0
 
 ;;
 ; Sets hCapability to 1 if the player number is 2 or 4.
-; rP1 must be $30 (key matrix released), such as after sgb_send or
-; read_pad.  When this happens, SGB returns 4 - player number in
+; rP1 must be $30 (key matrix deselected), such as after sgb_send
+; or read_pad.  When this happens, SGB returns 4 - player number in
 ; bits 1-0, where 3 means player 1, 2 means player 2, etc.
 ; Fully reading advances to the next player.
 capa_1_if_player_2:
