@@ -151,9 +151,9 @@ LY    0  DIV  D8  NR52 F0
 
 Early press times
 
-* Hold A: 5371
-* Hold B, Y, Select, or Start: 45935
-* Slow motion: 48205, 55005, 59443, 64051, 69667, 75287, 80931
+* Hold A: 5329
+* Hold B, Y, Select, or Start: 45575
+* Slow motion: 47827, 54575, 58977, 64653, 70229, 74696, 80297
 
 Measured rise time: all 0
 
@@ -169,9 +169,9 @@ LY    0  DIV  D8  NR52 F0
 
 Early press times
 
-* Hold A: 5566
-* Hold B, Y, Select, or Start: 45172
-* Slow motion: 45171, 49496, 54031, 60491, 65063, 70549, 76041
+* Hold A: 5522
+* Hold B, Y, Select, or Start: 44818
+* Slow motion: 49108, 53607, 60017, 64553, 69998, 75444, 80904
 
 Measured rise time: all 0
 

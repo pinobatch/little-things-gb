@@ -74,6 +74,8 @@ reset:
   ldh [hTimerHi], a
   ldh [hPressOccurred], a
   ldh [hPressRingBufferIndex], a
+  ldh [rTAC], a
+  ldh [rTIMA], a
   ld c, 160
   ld hl, wShadowOAM
   rst memset_tiny

@@ -212,8 +212,8 @@ wait_c_press:
 set_interrupts_for_collect:
   ld a, TACF_65KHZ
   ldh [rTAC], a
+  xor a
   ldh [rTMA], a
-  ldh [rTIMA], a
   ld a, TACF_65KHZ|TACF_START
   ldh [rTAC], a
   ld a, P1F_GET_BTN
