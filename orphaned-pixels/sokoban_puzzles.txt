@@ -1,3 +1,0 @@
-Puzzle layouts in a Sokoban clone may come from here:
-https://leehaywood.org/games/crossoban/copyrights.html
-https://github.com/asiekierka/free-game-levels
