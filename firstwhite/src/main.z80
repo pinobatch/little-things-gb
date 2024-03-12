@@ -1,9 +1,6 @@
 include "src/hardware.inc"
 include "src/global.inc"
 
-section "mainvars", WRAM0
-;cur_level: ds 1
-
 section "main", ROM0
 
 timer_handler::

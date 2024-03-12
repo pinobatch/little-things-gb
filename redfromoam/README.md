@@ -55,8 +55,8 @@ revisions of the PPU behave like this if OAM DMA is running:
   working on.  The even byte is treated as a character address, and
   the odd byte is treated as attributes.
 
-Game Boy Advance and very late Game Boy Color systems (with WRAM
-inside the SoC) behave somewhat differently during OAM scan.
+Game Boy Advance and very late Game Boy Color systems (CGB E, with
+WRAM inside the SoC) behave somewhat differently during OAM scan.
 
 Most games run OAM DMA during vertical blanking, a period between
 frames that lasts as long as 10 lines (4560 PPU cycles), such that

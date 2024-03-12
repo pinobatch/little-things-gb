@@ -32,6 +32,12 @@ else
   PY := python3
 endif
 
+# Support out-of-PATH RGBDS
+RGBASM  := $(RGBDS)rgbasm
+RGBLINK := $(RGBDS)rgblink
+RGBGFX  := $(RGBDS)rgbgfx
+RGBFIX  := $(RGBDS)rgbfix
+
 .SUFFIXES:
 .PHONY: run all dist zip
 
@@ -68,17 +74,17 @@ obj/gb/index.txt: makefile
 objlisto = $(foreach o,$(objlist),obj/gb/$(o).o)
 
 $(title).gb: $(objlisto)
-	rgblink -p 0xFF -m$(title).map -n$(title).sym -o$@ $^
-	rgbfix -p 0xFF -v $@
+	$(RGBLINK) -p 0xFF -m$(title).map -n$(title).sym -o$@ $^
+	$(RGBFIX) -p 0xFF -v $@
 
 $(title).gb.png: tools/pngify.py $(title).gb $(pngfile)
 	$(PY) $^ $@
 
 obj/gb/%.o: src/%.z80 src/hardware.inc src/global.inc
-	rgbasm -h -o $@ $<
+	$(RGBASM) -h -o $@ $<
 
 obj/gb/%.o: obj/gb/%.z80
-	rgbasm -h -o $@ $<
+	$(RGBASM) -h -o $@ $<
 
 # Files that will be included with incbin
 
@@ -91,7 +97,7 @@ obj/gb/main.o: obj/gb/Sukey.iu
 # mode 0 (all planes), mode 1 (third plane), and modes 4 and 5
 # (second plane).
 obj/gb/%.chrgb: tilesets/%.png
-	rgbgfx -o $@ $<
+	$(RGBGFX) -o $@ $<
 
 obj/gb/%.iu: obj/gb/%.chrgb
 	$(PY) tools/incruniq.py $< $@

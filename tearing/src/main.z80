@@ -1,6 +1,6 @@
 include "src/hardware.inc"
 
-STATUS_Y_B equ SCRN_Y_B - 1
+def STATUS_Y_B equ SCRN_Y_B - 1
 
 section "hvars", HRAM
 hVblanks: ds 1

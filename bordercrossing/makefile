@@ -23,6 +23,12 @@ GBEMU ?= sameboy
 # Convenience targets
 .PHONY: all run clean dist zip
 
+# Support out-of-PATH RGBDS
+RGBASM  := $(RGBDS)rgbasm
+RGBLINK := $(RGBDS)rgblink
+RGBGFX  := $(RGBDS)rgbgfx
+RGBFIX  := $(RGBDS)rgbfix
+
 all: $(romname).gb
 
 run: $(romname).gb
@@ -51,7 +57,7 @@ $(objdir)/carttypeicons.2bpp: tilesets/carttypeicons.png
 
 $(objdir)/%.nam.sentinel: tilesets/%.png
 	@mkdir -p $(objdir)
-	rgbgfx -u -d2 -t $(objdir)/$*.nam -o $(objdir)/$*.2bpp $<
+	$(RGBGFX) -u -d2 -t $(objdir)/$*.nam -o $(objdir)/$*.2bpp $<
 	touch $@
 $(objdir)/%.2bpp $(objdir)/%.nam: $(objdir)/%.nam.sentinel
 	test -f $@
@@ -63,9 +69,9 @@ $(objdir)/%.pb16: $(objdir)/%
 
 $(objdir)/%.o: src/%.z80 src/hardware.inc
 	@mkdir -p $(objdir)
-	rgbasm -h -o $@ $<
+	$(RGBASM) -h -o $@ $<
 $(objdir)/%.o: $(objdir)/%.z80
-	rgbasm -h -o $@ $<
+	$(RGBASM) -h -o $@ $<
 
 # Incbin dependencies
 $(objdir)/main.o: $(objdir)/bootborder.border
@@ -76,10 +82,10 @@ $(objdir)/pakswap.o: \
 
 # Linking
 $(objdir)/$(romname).gb.sentinel: $(foreach o,$(objs),$(objdir)/$(o).o)
-	rgblink -d -o "$(romname).gb" -n "$(romname).sym" -m "$(romname).map" $^
+	$(RGBLINK) -d -o "$(romname).gb" -n "$(romname).sym" -m "$(romname).map" $^
 	touch $@
 $(romname).gb: $(objdir)/$(romname).gb.sentinel makefile 
-	rgbfix -jsv -k P8 -l 0x33 -m MBC5 -p 0xFF -r 0 -t "$(headertitle)" $@
+	$(RGBFIX) -jsv -k P8 -l 0x33 -m MBC5 -p 0xFF -r 0 -t "$(headertitle)" $@
 $(romname).sym $(romname).map: $(objdir)/$(romname).gb.sentinel
 	test -f $@
 

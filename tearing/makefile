@@ -27,6 +27,11 @@ PY:=python3
 DOTEXE:=
 endif
 
+# Support out-of-PATH RGBDS
+RGBASM  := $(RGBDS)rgbasm
+RGBLINK := $(RGBDS)rgblink
+RGBFIX  := $(RGBDS)rgbfix
+
 PNGTOCHR := ../common/tools/pngtochr$(DOTEXE)
 
 # phony targets
@@ -69,7 +74,7 @@ $(objdir)/%16x16.2b: tilesets/%.png $(PNGTOCHR)
 
 # assembly
 $(objdir)/%.o: $(srcdir)/%.z80 $(srcdir)/hardware.inc
-	rgbasm -h -Wall -o $@ $<
+	$(RGBASM) -h -Wall -o $@ $<
 
 # linking
 
@@ -81,8 +86,8 @@ $(objdir)/%.o: $(srcdir)/%.z80 $(srcdir)/hardware.inc
 objlisto := \
   $(foreach o,$(objlist),$(objdir)/$(o).o)
 rom_and_dbg: $(objlisto)
-	rgblink -dt -o $(title).gb -n $(title).sym -p0xFF $^
-	rgbfix -jv -t "TEARING DEMO" -k "P8" -p0xFF $(title).gb
+	$(RGBLINK) -dt -o $(title).gb -n $(title).sym -p0xFF $^
+	$(RGBFIX) -jv -t "TEARING DEMO" -k "P8" -p0xFF $(title).gb
 
 $(title).sym $(title).gb: rom_and_dbg
 	touch $@

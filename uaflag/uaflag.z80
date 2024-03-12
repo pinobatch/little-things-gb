@@ -4,20 +4,20 @@
 
 ; first, an abbreviated hardware.inc
 
-_SCRN0       EQU $9800 ; $9800->$9BFF
-rP1 EQU $FF00
-rNR52 EQU $FF26
-rLCDC EQU $FF40
-LCDCF_ON      EQU %10000000 ; LCD Control Operation
-LCDCF_BGON    EQU %00000001 ; BG Display
-rSCY EQU $FF42
-rSCX EQU $FF43
-rLY EQU $FF44
-rBGP EQU $FF47
-rBCPS EQU $FF68
-rBCPD EQU $FF69
-rIE EQU $FFFF
-SIZEOF_SGB_PACKET equ 16
+def _SCRN0       EQU $9800 ; $9800->$9BFF
+def rP1 EQU $FF00
+def rNR52 EQU $FF26
+def rLCDC EQU $FF40
+def LCDCF_ON      EQU %10000000 ; LCD Control Operation
+def LCDCF_BGON    EQU %00000001 ; BG Display
+def rSCY EQU $FF42
+def rSCX EQU $FF43
+def rLY EQU $FF44
+def rBGP EQU $FF47
+def rBCPS EQU $FF68
+def rBCPD EQU $FF69
+def rIE EQU $FFFF
+def SIZEOF_SGB_PACKET equ 16
 
 ;;
 ; Syntax: drgb $FF9966 for color #FF9966

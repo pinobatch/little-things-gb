@@ -111,7 +111,7 @@ Vwf16SetTilemap::
   jr nz, .loop
   ret
 
-FIRST_GLYPH = $20
+def FIRST_GLYPH equ $20
 
 ;;
 ; Each glyph begins with a pointer to the start of each glyph's data

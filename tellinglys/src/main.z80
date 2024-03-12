@@ -1,7 +1,7 @@
 include "src/hardware.inc"
 include "src/global.inc"
 
-BLANK_TILE = $DE
+def BLANK_TILE equ $DE
 
 section "mainvars", WRAM0
 keys_pressed_so_far: ds 1

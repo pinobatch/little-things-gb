@@ -1,1 +1,1 @@
-hLocals equ $FF80
+def hLocals equ $FF80

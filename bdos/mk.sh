@@ -7,8 +7,17 @@
 # modification, are permitted in any medium without royalty
 # provided the copyright notice and this notice are preserved.
 # This file is offered as-is, without any warranty.
-#
+
+# syntax:
+# ./mk.sh math
+# RGBDS=/path/to/rgbds/bin/ ./mk.sh math
+
 set -e
+if [ -z "$1" ]; then
+  >&2 echo "$0: no program name given; try $0 progname"
+  >&2 echo "    example: \`$0 math\` builds math.gb from src/math.z80"
+  exit 1
+fi
 
 inttitle='BDOS TEST'
 onebitlist='font_Wasted'
@@ -17,10 +26,10 @@ mkdir -p obj/gb
 for filename in $onebitlist; do
   rgbgfx -d 1 -o "obj/gb/$filename.1b" "tilesets/$filename.png"
 done
-rgbasm -h -o "obj/gb/bdos.o" "src/bdos.z80"
-rgbasm -h -o "obj/gb/$1.o" "src/$1.z80"
-rgblink -o "$1.gb" -p 0xFF -m "$1.map" -n "$1.sym" "obj/gb/bdos.o" "obj/gb/$1.o"
-rgbfix -jvt "$inttitle" -p 0xFF "$1.gb"
+"${RGBDS}rgbasm" -h -o "obj/gb/bdos.o" "src/bdos.z80"
+"${RGBDS}rgbasm" -h -o "obj/gb/$1.o" "src/$1.z80"
+"${RGBDS}rgblink" -o "$1.gb" -p 0xFF -m "$1.map" -n "$1.sym" "obj/gb/bdos.o" "obj/gb/$1.o"
+"${RGBDS}rgbfix" -jvt "$inttitle" -p 0xFF "$1.gb"
 
 # to build:
 # ./mk.sh main

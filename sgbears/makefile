@@ -12,6 +12,12 @@ DOTEXE:=
 PY:=python3
 endif
 
+# Support out-of-PATH RGBDS
+RGBASM  := $(RGBDS)rgbasm
+RGBLINK := $(RGBDS)rgblink
+RGBGFX  := $(RGBDS)rgbgfx
+RGBFIX  := $(RGBDS)rgbfix
+
 .PHONY: all default run zip dist clean
 default: $(title).gb
 
@@ -39,31 +45,31 @@ $(PB8): $(TOOLSDIR)/pb8.c
 # Game Boy program part #############################################
 
 obj/gb/%.o: src/%.z80 src/hardware.inc
-	rgbasm -h -o $@ $<
+	$(RGBASM) -h -o $@ $<
 
 obj/gb/%.o: obj/gb/%.z80
-	rgbasm -h -o $@ $<
+	$(RGBASM) -h -o $@ $<
 
 obj/gb/main.o: \
   obj/gb/sgb-playmate.1b obj/gb/menutiles.1b obj/gb/credit.1b.pb16
 
 $(title).gb: $(foreach o,$(objlist),obj/gb/$(o).o)
-	rgblink -dto $@ -m $(title).map -n $(title).sym $^
-	rgbfix -jsvt "THE THREE BEARS" -l0x33 -kP8 $@
+	$(RGBLINK) -dto $@ -m $(title).map -n $(title).sym $^
+	$(RGBFIX) -jsvt "THE THREE BEARS" -l0x33 -kP8 $@
 
 # Graphic conversion ################################################
 
 obj/gb/%.2b: tilesets/%.png
-	rgbgfx -o $@ $<
+	$(RGBGFX) -o $@ $<
 
 obj/gb/%.h.1b: tilesets/%.png
-	rgbgfx -d1 -h -o $@ $<
+	$(RGBGFX) -d1 -h -o $@ $<
 
 obj/gb/%.1b: tilesets/%.png
-	rgbgfx -d1 -o $@ $<
+	$(RGBGFX) -d1 -o $@ $<
 
 obj/gb/%.u.2b: tilesets/%.png
-	rgbgfx -o $@ $< -ut $(basename $(basename $@)).nam
+	$(RGBGFX) -o $@ $< -ut $(basename $(basename $@)).nam
 
 # Partial workaround for lack of grouped targets in GNU Make pre-4.3
 # to break the build if the other file doesn't exist
