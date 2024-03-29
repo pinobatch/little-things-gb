@@ -22,10 +22,10 @@ include "src/hardware.inc"
 include "src/global.inc"
 
   rsset hLocals
-Lshiftermask rb 1
-Ldstoffset rb 1
+def Lshiftermask rb 1
+def Ldstoffset rb 1
 
-lineImgBufLen EQU 128  ; number of 1bpp planes
+def lineImgBufLen EQU 128  ; number of 1bpp planes
 
 ; Align is a logarithm in rgbasm, unlike in ca65 where it's an actual
 ; byte count

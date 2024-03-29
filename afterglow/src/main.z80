@@ -25,11 +25,15 @@ section "hLocals", HRAM[hLocals]
   ds locals_size
 hInitialA: ds 1
 hCapability:: ds 1
+
 hRedLevel: ds 1
 hGreenLevel: ds 1
 hBlueLevel: ds 1
+def NUM_NARROW_MENU_ITEMS = @ - hRedLevel
 hBgLevel: ds 1
+hDelayAfterFlash: ds 1
 hRepetitionCount: ds 1
+def NUM_MENU_ITEMS equ @ - hRedLevel
 
 section "WVARS", WRAM0
 wStack: ds 64
@@ -39,7 +43,6 @@ wCursorY: ds 1
 wDirtyColor: ds 1
 wSGBCooldown: ds 1
 
-def NUM_MENU_ITEMS equ 5
 def DMG_FIRST_MENU_ITEM equ 2
 def BGLEVEL_NAME_WIDTH equ 3
 def BGLEVEL_NAME_TILE equ $20
@@ -47,6 +50,7 @@ def MENU_Y equ 4
 def RGB_ROWS_X equ 5
 def BGREP_ROWS_X equ 9
 def SGB_COOLDOWN_FRAMES equ 4
+def DEFAULT_DELAY_AFTER_FLASH equ 40  ; tenths of second
 
 section "HEADER", ROM0[$100]
   nop
@@ -78,6 +82,8 @@ reset:
   ldh [hGreenLevel], a
   rra
   ldh [hRepetitionCount], a
+  ld a, DEFAULT_DELAY_AFTER_FLASH
+  ldh [hDelayAfterFlash], a
   ld hl, hramcode_LOAD
   ld de, hramcode_RUN
   call memcpy_pascal16
@@ -109,12 +115,28 @@ reset:
 
 ; Menu ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-restart:
-  ; Draw the menu with labels
-  call lcd_off
-  ld h, $0A
-  call clear_scrn0_to_h
+def SPACE_TILE equ $0A
+def PERIOD_TILE equ $0C
 
+restart:
+  ; Clear both attribute tables and both nametables.
+  ; Because we aren't turning off LCD before or after the test,
+  ; blank the second nametable for the test's use.
+  call lcd_off
+  ld de, _SCRN0
+  ld bc, 2048
+  ld a, 1
+  ldh [rVBK], a
+  ld h, c
+  call memset
+
+  ld de, _SCRN0
+  ld bc, 2048
+  xor a
+  ldh [rVBK], a
+  ld h, SPACE_TILE
+  call memset
+  
   ; Draw afterglow logo
   ldxy hl, 1, 1
   ld b, 9
@@ -167,7 +189,8 @@ restart:
   ld de, $870
   call vwfDrawLabels
 
-  ; turn on the PPU
+  ; turn on the PPU, and *keep* it on so that a white flash
+  ; from lcd_off doesn't activate the photometer
   xor a
   ldh [rBGP], a
   ldh [rIF], a
@@ -185,26 +208,27 @@ restart:
     ld b, a
     bit PADB_START, b
     jr z, .no_instructions
+      ; Start: view instructions
       ld hl, instructions_msg
-    .do_instructions_and_restart:
       call do_instructions
-    .restart1:
       jp restart
     .no_instructions:
     bit PADB_B, b
     jr z, .no_blank
-      ld hl, 0
-      jr .do_instructions_and_restart
+      ; B: blank the screen until next press
+      ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8000|LCDCF_BG9C00
+      ldh [rLCDC], a
+      call wait_for_button_press
+      jr .loop
     .no_blank:
     bit PADB_A, b
     jr z, .no_run
       call run_test
-      jr .restart1
+      jr .loop
     .no_run:
 
-    call get_minimum_cursor_y
-
     ; Recognize up and down to move cursor
+    call get_minimum_cursor_y
     ld a, [wCursorY]
     ld c, a
     ; B: buttons pressed; C: current Y; D: minimum Y
@@ -281,10 +305,6 @@ restart:
     ld a, l
     ld [oam_used], a
 
-    ; TODO: recognize left and right to change value
-    ; TODO: update color
-    ; TODO: recognize A for run
-
     ; Push everything to video memory
     ld a, [wDirtyColor]
     or a
@@ -317,8 +337,9 @@ do_instructions:
   ld a, h
   or l
   call nz, vwfDrawLabels
-  ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8000
+  ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8000|LCDCF_BG9800
   ldh [rLCDC], a
+wait_for_button_press:
   ei
   .loop:
     halt
@@ -353,7 +374,7 @@ get_minimum_cursor_y:
   ret
 
 
-GRAY_COLOR = $421 * 21
+def GRAY_COLOR equ $421 * 21
 ;;
 ; Fills help_line_buffer with a PAL01 packet containing
 ; background color, inverse background color, target color, and gray
@@ -409,7 +430,7 @@ update_color:
     add hl, hl
     add hl, hl
     ld a, d
-    cp 3
+    cp NUM_NARROW_MENU_ITEMS
     sbc a
     and RGB_ROWS_X^BGREP_ROWS_X
     xor BGREP_ROWS_X
@@ -460,7 +481,15 @@ update_color:
         ld a, c
         and %00001111
       .d_last_write:
-      ld [hl], a
+      ld c, a
+      ; if it's the delay row, write a period
+      ld a, d
+      cp hDelayAfterFlash-hRedLevel
+      jr nz, .d_not_decimal
+        ld a, $0C
+        ld [hl+], a
+      .d_not_decimal:
+      ld [hl], c
     .dcontinue
     inc d
     ld a, d
@@ -522,7 +551,8 @@ value_ranges:
   db 1, 31, 3
   db 1, 1, 1
   db 2, 240, 240
-
+  db 2, 240, 240
+assert @-value_ranges == NUM_MENU_ITEMS * 3
 
 section "CHR_src", ROM0
 main_chr:
@@ -531,19 +561,13 @@ main_chr:
   incbin "obj/gb/chr16.2bpp"
 .end:
 
-section "nonsgb_msg", ROM0
 def COPRSYMBOL equ $7F
 def LF equ $0A
-nonsgb_msg:
-  db 16, 16, "afterglow", LF
-  db 16, 32, "This software must be", LF
-  db 16, 40, "used on Super Game Boy", LF
-  db 16, 48, "or Game Boy Color.", 0
 
 section "instructions_msg", ROM0
 instructions_msg:
   db 16,  0, "Use this to measure how long",LF
-  db 16,  8, "a TV keeps giving off light",LF
+  db 16,  8, "a TV keeps emitting light",LF
   db 16, 16, "after the input goes dark.",LF
   db 16, 32, "After 120 frames of",LF
   db 16, 40, "background to give time to",LF
@@ -552,9 +576,9 @@ instructions_msg:
   db 24, 64, "5 sync (inverted background)",LF
   db 24, 72, "60 background",LF
   db 24, 80, "5 the chosen color",LF
-  db 24, 88, "240 background",LF
+  db 24, 88, "6-1200 background",LF
   db 16,104, "Caution: Super Game Boy",LF
-  db 16,112, "drops a lot of frames.",LF
+  db 16,112, "drops 1.7% of frames.",LF
   db 16,128, "Concept by zeta0134",0
 
 section "menu_msg", ROM0
@@ -563,13 +587,14 @@ menu_msg:
   ; $20-$22 and $23-$25
   db  72, 56,"Black",LF
   db  72, 56,"White",LF
-  db  88,  8,COPRSYMBOL," 2023",LF
+  db  88,  8,"v0.02 ",COPRSYMBOL," 2024",LF
   db  88, 16,"Damian Yerrick",LF
   db 104, 32,"A: run",LF
   db 104, 40,"B: blank",LF
   db 104, 48,"Start: help",LF
   db  16, 56,"Background",LF
-  db  16, 64,"Repetitions",LF
+  db  16, 64,"Delay after",LF
+  db  16, 72,"Repetitions",LF
   db  42,136,"Point sensor here",0
 
 menu_color_labels_msg:
@@ -586,10 +611,7 @@ def hRepsLeft equ hLocals+0
 
 run_test:
   call calc_pal01
-  call lcd_off
-  ld h, $0A
-  call clear_scrn0_to_h
-  ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8000
+  ld a, LCDCF_ON|LCDCF_BGON|LCDCF_BG8000|LCDCF_BG9C00
   ldh [rLCDC], a
 
   lb bc, 120, 0  ; time to start equipment
@@ -608,10 +630,23 @@ run_test:
     lb bc, 5, 2  ; Chosen color
     call color_c_wait_b
     ret nz
-    lb bc, 240, 0  ; BG (long
+    lb bc, 6, 0  ; BG (before long settle)
     call color_c_wait_b
     ret nz
-    
+
+    ld b, 6  ; one-tenth of a second
+    ldh a, [hDelayAfterFlash]
+    dec a
+    ld c, a
+    jr z, .minimum_delay_after_flash
+    .delay_after_flash_loop:
+      push bc
+      call wait_b
+      pop bc
+      ret nz
+      dec c
+      jr nz, .delay_after_flash_loop
+    .minimum_delay_after_flash:
     ldh a, [hRepsLeft]
     dec a
     jr nz, .reps_loop
@@ -656,7 +691,7 @@ color_c_wait_b:
   .have_bgp:
     ldh [rBGP], a
   .no_bgp:
-
+wait_b:
   .loop:
     push bc
     call read_pad
