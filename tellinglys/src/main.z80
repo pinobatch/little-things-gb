@@ -272,9 +272,9 @@ load_title_bg:
   call memset
   ld hl,CHRRAM0
   ld de,title_chr
-  ld b,106
+  ld b,128
   call pb16_unpack_block
-  ld bc,20*256+11
+  ld bc,20*256+13
   ld de,_SCRN0+32*4+0
   ld hl,title_nam
   call load_pb16_nam
