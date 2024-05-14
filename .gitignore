@@ -22,6 +22,7 @@
 */obj/gg/*.pal
 */obj/gb/*.pal
 */obj/gb/*.z80
+*/obj/gb/*.s
 */obj/gb/*.border
 */obj/gb/*sentinel
 __pycache__

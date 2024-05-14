@@ -1,9 +1,12 @@
 include "src/hardware.inc"
 
-section "stat_hram_src", ROM0[$40]
-stat_handler:        ;  5
-  push af            ;  9
-  jr lyc_stat_hram   ; 12
+section "stat_wram", WRAM0
+wStatValuesPtr: ds 2
+
+section "stat_hram_src", ROM0[$48]
+stat_handler:   ;  5
+  push af       ;  9
+  jr hStatSMC   ; 12
 
 stat_tail:
   ; Schedule next interrupt
@@ -33,17 +36,44 @@ stat_tail:
   pop af
   reti
 
-section "stat_hram_src", ROM0
-stat_hram_src:
-  dw stat_hram
-  dw stat_hram.end-stat_hram
-load "stat_hram", HRAM[$FFF9]
+; These routines get copied to the end of high RAM, preferably
+; within JR range of RSTs and IRQs.
+
+section "hramcode_src", ROM0
+hramcode_src::
+  dw hramcode_dst
+  dw hramcode_src_end-hramcode_src-4
+load "stat_hram", HRAM[$FFF4]
+hramcode_dst:
+
+;;
+; Start OAM DMA and wait for it to finish.
+;
+; While OAM DMA is running, both ROM and WRAM are inaccessible; only
+; HRAM is readable.  Yet the CPU continues to run for 161 cycles:
+; one warm-up and one for each byte.
+; @param A high byte of OAM DMA source address
+; @param B 40
+; @param C low(rDMA)
+; @return B=0
+run_dma_tail::
+  ldh [c], a
+.loop:
+  dec b
+  jr nz, .loop
+  ; It's been 159 cycles after the write.  We need 2 more before
+  ; we can read the stack again.
+  ret z  ; And the conditional return provides the extra 2.
+
+;;
+; Load a value and write it to an address, and then finish the
+; STAT interrupt.  This is the self-modifying portion. 
 hStatSMC:
   ld a, $30          ; 14
   ldh [rP1], a       ; 17
   jr stat_tail
-.end
 endl
+hramcode_src_end:
 
 section "init_hram_src", ROM0
 ;;
