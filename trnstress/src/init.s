@@ -22,7 +22,7 @@ reset:
   ; sooner rather than later
   xor a
   ldh [rBGP], a
-  ldh [cur_keys], a
+  ldh [hCurKeys], a
   ldh [hVblanks], a
   ldh [hCapability], a
   ldh [rIF], a
@@ -70,7 +70,7 @@ memset_inc::
   jr nz,memset_inc
   ret
 
-section "memcpy", ROM0
+section "memset", ROM0
 clear_scrn0_to_0::
   ld h, 0
   fallthrough clear_scrn0_to_h
@@ -98,6 +98,7 @@ memset::
   jr nz,.loop
   ret
 
+section "memcpy", ROM0
 ;;
 ; Copy a string preceded by a 2-byte address and 2-byte length
 ; from HL.

@@ -25,8 +25,8 @@ def DAS_DELAY equ 15
 def DAS_SPEED equ 3
 
 SECTION "hram_pads", HRAM
-cur_keys:: ds 1
-new_keys:: ds 1
+hCurKeys:: ds 1
+hNewKeys:: ds 1
 
 SECTION "ram_pads", WRAM0
 das_keys:: ds 1
@@ -37,8 +37,8 @@ SECTION "rom_pads", ROM0
 ; Controller reading ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ; This controller reading routine is optimized for size.
-; It stores currently pressed keys in cur_keys (1=pressed) and
-; keys newly pressed since last read in new_keys, with the same
+; It stores currently pressed keys in hCurKeys (1=pressed) and
+; keys newly pressed since last read in hNewKeys, with the same
 ; nibble ordering as the Game Boy Advance.
 ; 76543210
 ; |||||||+- A
@@ -69,13 +69,13 @@ read_pad::
   ld a,P1F_GET_NONE
   ldh [rP1],a
 
-  ; Combine with previous cur_keys to make new_keys
-  ldh a,[cur_keys]
+  ; Combine with previous hCurKeys to make hNewKeys
+  ldh a,[hCurKeys]
   xor b    ; A = keys that changed state
   and b    ; A = keys that changed to pressed
-  ldh [new_keys],a
+  ldh [hNewKeys],a
   ld a,b
-  ldh [cur_keys],a
+  ldh [hCurKeys],a
   ret
 
 .onenibble:
@@ -89,12 +89,12 @@ read_pad::
   ret
 
 ;;
-; Adds held keys to new_keys, DAS_DELAY frames after press and
+; Adds held keys to hNewKeys, DAS_DELAY frames after press and
 ; every DAS_SPEED frames thereafter
 ; @param B which keys are eligible for autorepeat
 autorepeat::
   ; If no eligible keys are held, skip all autorepeat processing
-  ldh a,[cur_keys]
+  ldh a,[hCurKeys]
   and b
   ret z
   ld c,a  ; C: Currently held
@@ -102,8 +102,8 @@ autorepeat::
   ; If any keys were newly pressed, set the eligible keys among them
   ; as the autorepeating set.  For example, changing from Up to
   ; Up+Right sets Right as the new autorepeating set.
-  ldh a,[new_keys]
-  ld d,a  ; D: new_keys
+  ldh a,[hNewKeys]
+  ld d,a  ; D: hNewKeys
   or a
   jr z,.no_restart_das
   and b
@@ -119,7 +119,7 @@ autorepeat::
   ld a,[das_keys]
   and c
   or d
-  ldh [new_keys],a
+  ldh [hNewKeys],a
   ld a,DAS_SPEED
 .have_das_timer:
   ld [das_timer],a

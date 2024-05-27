@@ -5,22 +5,24 @@ title=trnstress
 inttitle='TRN STRESS'
 objlist="init irqhandler main pads ppuclear sgb unpb16 vwfdraw vwflabels"
 genobjlist='vwf7_cp144p localvars'
-twobitlist=''
-pb16list='title_cubby menu_cubby'
+gfxwithnamlist='title_cubby menu_cubby'
+gfx2blist='title_letters'
+pb16list=''
 borderlist='title menu'
 
 mkdir -p obj/gb
 
 # Bespoke conversions
 python3 tools/vwfbuild.py tilesets/vwf7_cp144p.png obj/gb/vwf7_cp144p.s
-"${RGBDS}rgbgfx" -ut obj/gb/title_cubby.nam -o obj/gb/title_cubby.2b -b 0xD0 -c embedded tilesets/title_cubby.png
-"${RGBDS}rgbgfx" -ut obj/gb/menu_cubby.nam -o obj/gb/menu_cubby.2b -b 0xD0 -c embedded tilesets/menu_cubby.png
 
 # Generic conversions
-for f in $twobitlist $pb16list; do
-  rgbgfx -c embedded -o "obj/gb/$f.2b" "tilesets/$f.png"
+for f in $gfxwithnamlist; do
+  rgbgfx -ut "obj/gb/$f.nam" -o "obj/gb/$f.2b" "@tilesets/$f.flags" "tilesets/$f.png"
 done
-for f in $pb16list; do
+for f in $gfx2blist; do
+  rgbgfx -o "obj/gb/$f.2b" "@tilesets/$f.flags" "tilesets/$f.png"
+done
+for f in $gfx2blist $gfxwithnamlist $pb16list; do
   python3 tools/pb16.py "obj/gb/$f.2b" "obj/gb/$f.2b.pb16"
 done
 for f in $borderlist; do

@@ -17,7 +17,7 @@ Writing code specification and collecting test graphics
 - DONE Design the menu in GIMP
 - 0/1 borderconv: ensure `-c embedded` style behavior for <= 16-color
   indexed PNG images
-- 0/3 Display the SGB only error message, title screen, and credits
+- DONE Display the SGB only error message, title screen, and credits
 - 0/1 Display the menu
 - 0/1 Validate the STAT scroll engine
 - 0/16 Gather 16 images depicting anthropomorphic bears in mid to

@@ -196,6 +196,112 @@ sgb_load_trn_tilemap::
   ld de, _SCRN0
   jp load_full_nam
 
+def SGB_BORDER_COLS EQU 32
+def SGB_BORDER_ROWS EQU 28
+def SIZEOF_SGB_BORDER_TILEMAP EQU SGB_BORDER_ROWS * 2 * SGB_BORDER_COLS
+def SIZEOF_SGB_BORDER_PALETTE EQU 16 * 2 * 4
+def SGB_BORDER_PALETTE_ADDR EQU $8800
+
+;;
+; Sends a NORMAL border consisting of the following:
+; 1. unique tile count minus 1
+; 2. 1-256 4bpp tiles compressed with PB16
+; 3. 1792 bytes of tilemap compressed with PB16
+; 4. 96 bytes of palette (not compressed)
+; @param HL start of border data
+sgb_send_border::
+  push hl
+  call sgb_freeze
+  call sgb_load_trn_tilemap
+  pop de
+
+  ; Load tiles
+  ld a, [de]
+  inc de
+  add a
+  jr c, .is_2_chr_trns
+    ; Only one CHR_TRN
+    add 2
+    ld b, a
+    call pb16_unpack_to_CHRRAM0
+    ; ld b, 0  ; guaranteed by pb16_unpack
+    jr .do_final_CHR_TRN
+  .is_2_chr_trns:
+    ; First half is 4K
+    push af
+    ld b, low(128 * 32 / 16)
+    call pb16_unpack_to_CHRRAM0
+    ld a, $13<<3|1
+    push de
+    call sgb_send_trn_ab
+    pop de
+    pop af
+
+    ; Second half is the remaining bytes
+    add 2
+    ld b, a
+    call pb16_unpack_to_CHRRAM0
+    ; ld b, 0
+    inc b
+  .do_final_CHR_TRN:
+  ld a, $13<<3|1
+  push de
+  call sgb_send_trn_ab
+  pop de
+
+  ; Unpack tilemap and copy palette
+  ld b,SIZEOF_SGB_BORDER_TILEMAP/16
+  call pb16_unpack_to_CHRRAM0
+
+  ; In the SNESdev Discord server on March 23, 2023, user dalton
+  ; pointed out that some Super Game Boy commands caused the bottom
+  ; scanline of the border to flicker.  Pino investigated in Mesen.
+  ;
+  ; It turns out that 29 rows of the border tilemap sent through
+  ; PCT_TRN are at least partly visible.  The SGB system software
+  ; sets the border layer's vertical scroll position (BG1VOFS) to 0.
+  ; Because the S-PPU normally displays lines BGxVOFS+1 through
+  ; BGxVOFS+224 of each layer, this hides the first scanline of the
+  ; top row of tiles and adds one scanline of the nominally invisible
+  ; 29th row.  Most of the time, SGB hides this scanline with forced
+  ; blanking (writing $80 to address $012100).  While SGB is busy
+  ; doing some things, such as fading out the border's palette, it
+  ; neglects to force blanking, making the scanline visible at least
+  ; some of the time.
+  ; 
+  ; To eliminate flicker, write a row of all-black tilemap entries
+  ; after the bottom row of the border ($8700-$873F in VRAM in a
+  ; PCT_TRN), or at least a row of tiles whose top row is blank.
+  ; If that is not convenient, such as if a border data format
+  ; doesn't guarantee a particular index for a black tile, make
+  ; the flicker less objectionable by repeating the last scanline.
+  ; Take the bottommost row (at $86C0-$86FF in VRAM) and copy it to
+  ; the extra row, flipped vertically (XOR with $8000).
+  ;
+  ; Border Crossing currently uses the latter approach.
+  push de  ; Stack: data stream (points at palette)
+  ld de, $8000 + SIZEOF_SGB_BORDER_TILEMAP - 64
+  ld c, SGB_BORDER_COLS
+  .below_bottom_loop:
+    ld a, [de]
+    ld [hl+], a
+    inc e
+    ld a, [de]
+    xor %10000000  ; vertically flip repeated row
+    ld [hl+], a
+    inc e
+    dec c
+    jr nz, .below_bottom_loop
+
+  ; Copy palette and that's all
+  pop hl
+  ld de, SGB_BORDER_PALETTE_ADDR
+  ld c, SIZEOF_SGB_BORDER_PALETTE
+  call memcpy
+  ; ld b, 0  ; guaranteed by memcpy
+  ld a, $14<<3|1  ; PCT_TRN
+  fallthrough sgb_send_trn_ab
+
 ;;
 ; Turns on rendering, sends a *_TRN packet with first two bytes
 ; A and B, and turns rendering back off.

@@ -67,6 +67,10 @@ pb16_unpack_packet:
   jr nz,.byteloop
   ret
 
+pb16_unpack_to_CHRRAM0::
+  ld hl, $8000
+  fallthrough pb16_unpack_block
+
 ;;
 ; Unpacks 2*B packets from DE to HL, producing 8 bytes per packet.
 ; About 127 cycles (2 scanlines) per 8-byte packet; filling CHR RAM
@@ -86,3 +90,5 @@ pb16_unpack_block::
   dec b
   jr nz,.packetloop
   ret
+
+  
