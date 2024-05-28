@@ -3,7 +3,9 @@ set -e
 
 title=trnstress
 inttitle='TRN STRESS'
-objlist="init irqhandler main pads ppuclear sgb unpb16 vwfdraw vwflabels"
+objlist="init irqhandler main title menu scramble \
+  pads ppuclear sgb unpb16 vwfdraw vwflabels"
+
 genobjlist='vwf7_cp144p localvars'
 gfxwithnamlist='title_cubby menu_cubby'
 gfx2blist='title_letters'

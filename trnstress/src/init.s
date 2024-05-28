@@ -141,3 +141,18 @@ memcpy::
   dec b
   jr nz,.loop
   ret
+
+; If you get an error about scope, upgrade to RGBDS 0.7 or later
+stpcpy.continue:
+  inc de
+;;
+; Copies from HL to DE, stopping at a $00 byte
+; @param HL source
+; @param DE destination
+; @return A = 0; DE = pointer to final NUL
+stpcpy::
+  ld a,[hl+]
+  ld [de],a
+  or a
+  jr nz, .continue
+  ret

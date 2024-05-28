@@ -178,12 +178,15 @@ section "sgbcode", ROM0
 
 ;;
 ; Turns off the LCD, sets scroll to 0, sets BGP to identity ($E4),
-; and sets up an identity tilemap in _SCRN0 for Super Game Boy
-; *_TRN commands.  (Clobbers entire _SCRN0.)
+; turns off objects and window, sets BG pattern to $8000/$8800 and
+; tilemap base to _SCRN0, and sets up an identity tilemap in _SCRN0
+; for Super Game Boy *_TRN commands.  (Clobbers entire _SCRN0.)
 sgb_load_trn_tilemap::
   call lcd_off
   ld a, %11100100
   ldh [rBGP], a
+  ld a, LCDCF_BGON|LCDCF_BLK01|LCDCF_BG9800
+  ldh [rLCDC], a
   call clear_scrn0_to_0
   ld hl, _SCRN0+640
   push hl
@@ -199,7 +202,7 @@ sgb_load_trn_tilemap::
 def SGB_BORDER_COLS EQU 32
 def SGB_BORDER_ROWS EQU 28
 def SIZEOF_SGB_BORDER_TILEMAP EQU SGB_BORDER_ROWS * 2 * SGB_BORDER_COLS
-def SIZEOF_SGB_BORDER_PALETTE EQU 16 * 2 * 4
+def SIZEOF_SGB_BORDER_PALETTE EQU 16 * 2 * 3
 def SGB_BORDER_PALETTE_ADDR EQU $8800
 
 ;;
@@ -224,16 +227,19 @@ sgb_send_border::
     add 2
     ld b, a
     call pb16_unpack_to_CHRRAM0
-    ; ld b, 0  ; guaranteed by pb16_unpack
+    call sgb_scramble_chr
+    ;ld b, 0  ; B=0: load first half
     jr .do_final_CHR_TRN
   .is_2_chr_trns:
     ; First half is 4K
     push af
     ld b, low(128 * 32 / 16)
     call pb16_unpack_to_CHRRAM0
+    call sgb_scramble_chr
     ld a, $13<<3|1
     push de
     call sgb_send_trn_ab
+    call sgb_load_trn_tilemap
     pop de
     pop af
 
@@ -241,12 +247,13 @@ sgb_send_border::
     add 2
     ld b, a
     call pb16_unpack_to_CHRRAM0
-    ; ld b, 0
-    inc b
+    call sgb_scramble_chr
+    inc b  ; B=1: load second half
   .do_final_CHR_TRN:
   ld a, $13<<3|1
   push de
   call sgb_send_trn_ab
+  call sgb_load_trn_tilemap
   pop de
 
   ; Unpack tilemap and copy palette
@@ -298,7 +305,8 @@ sgb_send_border::
   ld de, SGB_BORDER_PALETTE_ADDR
   ld c, SIZEOF_SGB_BORDER_PALETTE
   call memcpy
-  ; ld b, 0  ; guaranteed by memcpy
+  call sgb_scramble_pct
+  ;ld b, 0
   ld a, $14<<3|1  ; PCT_TRN
   fallthrough sgb_send_trn_ab
 
@@ -307,8 +315,9 @@ sgb_send_border::
 ; A and B, and turns rendering back off.
 sgb_send_trn_ab::
   ld l, a
-  ld a,LCDCF_ON|LCDCF_BGON|LCDCF_BG8000|LCDCF_BG9800
-  ldh [rLCDC],a
+  ldh a, [rLCDC]
+  or LCDCF_ON
+  ldh [rLCDC], a
   ld a, l
   call sgb_send_ab
   jp lcd_off
