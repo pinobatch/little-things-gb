@@ -168,13 +168,35 @@
 
   ; Destination 16-bit regs
   .elseif .xmatch ({dst}, bc)
-    .byte $01
-    .word src
+    .if .xmatch ({src}, de)
+      ld b, d
+      ld c, e
+    .elseif .xmatch ({src}, hl)
+      ld b, h
+      ld c, l
+    .else
+      .byte $01
+      .word src
+    .endif
   .elseif .xmatch ({dst}, de)
-    .byte $11
-    .word src
+    .if .xmatch ({src}, bc)
+      ld d, b
+      ld e, c
+    .elseif .xmatch ({src}, hl)
+      ld d, h
+      ld e, l
+    .else
+      .byte $11
+      .word src
+    .endif
   .elseif .xmatch ({dst}, hl)
-    .if .xmatch (.left(2, {src}), sp+)
+    .if .xmatch ({src}, bc)
+      ld h, b
+      ld l, c
+    .elseif .xmatch ({src}, de)
+      ld h, d
+      ld l, e
+    .elseif .xmatch (.left(2, {src}), sp+)
       .byte $F8
       _sm83_sbyte (.mid (2, .tcount ({src})-2, {src}))
     .elseif .xmatch (.left(2, {src}), sp-)
@@ -384,7 +406,12 @@
 .endmacro
 
 .macro sub dst, src
-  _sm83_alu $90, dst, src
+  .if .xmatch ({dst}, sp)
+    .byte $E8
+    _sm83_sbyte -(src)
+  .else
+    _sm83_alu $90, dst, src
+  .endif
 .endmacro
 
 .macro sbc dst, src
@@ -565,6 +592,18 @@
 .macro djnz target
   dec b
   jr nz, target
+.endmacro
+
+.macro neg aorblank
+  .if .blank ({aorblank})
+    dec a
+    cpl
+  .elseif .xmatch ({aorblank}, a)
+    dec a
+    cpl
+  .else
+    .error "neg: unknown source"
+  .endif
 .endmacro
 
 .endif  ; _sm83_INCLUDED

@@ -594,4 +594,16 @@
   jr nz, target
 .endmacro
 
+.macro neg aorblank
+  .if .blank ({aorblank})
+    dec a
+    cpl
+  .elseif .xmatch ({aorblank}, a)
+    dec a
+    cpl
+  .else
+    .error "neg: unknown source"
+  .endif
+.endmacro
+
 .endif  ; _sm83_INCLUDED
