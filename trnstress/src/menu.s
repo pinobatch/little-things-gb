@@ -8,7 +8,7 @@ def MENU_CUBBY_WIDTH equ 7
 def MENU_CUBBY_HEIGHT equ 12
 def MENU_CUBBY_X equ 0
 def MENU_CUBBY_Y equ 3
-def MENU_CUBBY_TILES equ 72
+def MENU_CUBBY_TILES equ 70
 def MENU_DIGITS_TILE_BASE equ $80 - 12
 ; use a scramble when loading the "Test Cards" border
 def MENU_SCRAMBLE_TO_TEST equ 0
@@ -105,25 +105,29 @@ show_scramble_menu::
     dec b
     bit 7, b
     jr z, .scramble_name_rowloop
+
+  ; terminate the list of labels with a NUL and do various
+  ; other work with A=0
   dec de
   xor a
-  ld [de], a   ; nul terminaton
+  ld [de], a
   ldh [rSCX], a
   ldh [rSCY], a
-  ld b, b
   ld hl, SOAM
   ld c, 160 
   rst memset_tiny
+
+  ; draw the labels
   ld de, ($8800 >> 4) + MENU_CUBBY_TILES
   ld hl, vMenuLabelsScratch
   call vwfDrawLabels
   ld b, 0
   call draw_arrow_cursor
+
+  ; 5. Load object tiles
   call run_dma
   ld a, %11010000
   ldh [rOBP0], a
-
-  ; 5. Load object tiles
   ld hl, menu_arrow_tile
   ld de, $8000 + MENU_CURSOR_TILE * 16
   ld bc, 16

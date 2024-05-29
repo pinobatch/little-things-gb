@@ -225,18 +225,158 @@ window_proc:
 ; 8-line objects ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; move top right 32 by 80 pixels to object plane
 
-obj8x8_name: db "NYA 8-line objects", 0
+obj8x8_name: db "8-line objects", 0
 obj8x8_proc:
-  ld b, b
-  ret
+  ; Draw a rectangle of objects
+  ld hl, _OAMRAM
+  .objloop:
+    ; 4 objects per row
+    ld a, l  ; L = YYYYXX00
+    and %11110000
+    ld e, a  ; E = row * 16
+    rra
+    add 16
+    ld [hl+], a  ; Y position
+    ld a, l
+    and %00001100
+    add a
+    add 128+8
+    ld [hl+], a    ; X position
+    ld a, l
+    and %11111100  ; A = row * 16 + column * 4
+    rra
+    rra            ; A = row * 4 + column
+    add e          ; A = row * 20 + column
+    add 16
+    ld [hl+], a    ; tile number
+    xor a
+    ld [hl+], a
+    ld a, l
+    cp $A0
+    jr c, .objloop
+
+  ; Enable drawing objects
+  ld a, LCDCF_BGON|LCDCF_BLK01|LCDCF_BG9800|LCDCF_OBJON|LCDCF_OBJ8
+  ldh [rLCDC], a
+
+  ; Blank tile $FF and blank this rectangle in the background plane
+  xor a
+  ld hl, $8FF0
+  ld c, 16
+  rst memset_tiny
+  dec a
+  ld hl, $9B00
+  ld c, l
+  rst memset_tiny  ; H = $9D00
+  dec h
+  lb bc, 4, 10
+  ldxy de, 16, 0
+  jp load_nam
 
 ; 16-line objects ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; move right 64 by 80 pixels to object plane
+; swap tiles 13, 15, 17, and 19 of each row pair with 32, 34, 36,
+; and 38, then move right 64 by 80 pixels to object plane
 
-obj8x16_name: db "NYA 16-line objects", 0
+def OBJ16_ROWPAIR_LEN equ 640
+def OBJ16_ROWPAIRS_END equ $8000 + 5 * OBJ16_ROWPAIR_LEN
+
+obj8x16_name: db "16-line objects", 0
 obj8x16_proc:
-  ld b, b
-  ret
+  ; In each 2x2-tile group in the upper 64x80, swap the top right and
+  ; bottom left tiles
+  ld de, $8000 + 13 * 16
+  .rowpairloop:
+    ld hl, (32 - 13) * 16
+    add hl, de
+    .byteloop:
+      ld c, [hl]
+      ld a, [de]
+      ld [hl+], a
+      ld a, c
+      ld [de], a
+      inc de
+      ld a, e
+      and $0F
+      jr nz, .byteloop
+    ld a, e
+    add 16
+    ld e, a
+    adc d
+    sub e
+    ld d, a
+    ; At right side, tile index modulo 640 should be 21
+    ; which implies byte index modulo 128 should be 80
+    ld a, e
+    and %01110000
+    cp 80
+    jr nz, .rowpairloop
+    ; Move to next row pair
+    if low(OBJ16_ROWPAIR_LEN - 128) == 0
+      or a
+    else
+      ld a, low(OBJ16_ROWPAIR_LEN - 128)
+      add e
+      ld e, a
+    endc
+    ld a, high(OBJ16_ROWPAIR_LEN - 128)
+    adc d
+    ld d, a
+    ld a, e
+    sub low(OBJ16_ROWPAIRS_END)
+    ld a, d
+    sub high(OBJ16_ROWPAIRS_END)
+    jr c, .rowpairloop
+
+  ; Draw a rectangle of objects
+  ld hl, _OAMRAM
+  .objloop:
+    ; 8 objects per row
+    ld a, l  ; L = YYYXXX00
+    and %11100000
+    ld e, a  ; E = row * 32
+    rra
+    add 16
+    ld [hl+], a  ; Y position
+    ld a, l
+    and %00011100
+    add a
+    add 96+8
+    ld [hl+], a    ; X position
+    ld a, l
+    and %11111000  ; A = row * 32 + column / 2 * 8
+    rra
+    rra            ; A = row * 8 + column
+    add e          ; A = row * 40 + column / 2 * 2
+    bit 2, l
+    jr z, .obj_even
+      add 20
+    .obj_even:
+    ld b, b
+    add 12
+    ld [hl+], a    ; tile number
+    xor a
+    ld [hl+], a
+    ld a, l
+    cp $A0
+    jr c, .objloop
+
+  ; Enable drawing objects
+  ld a, LCDCF_BGON|LCDCF_BLK01|LCDCF_BG9800|LCDCF_OBJON|LCDCF_OBJ16
+  ldh [rLCDC], a
+
+  ; Blank tile $FF and blank this rectangle in the background plane
+  xor a
+  ld hl, $8FF0
+  ld c, 16
+  rst memset_tiny
+  dec a
+  ld hl, $9B00
+  ld c, l
+  rst memset_tiny  ; H = $9D00
+  dec h
+  lb bc, 8, 10
+  ldxy de, 12, 0
+  jp load_nam
 
 ; coarse X scroll ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; move all tilemap entries 1 byte later and compensate with SCX
@@ -344,17 +484,96 @@ reverse_y_raster:
   db low(rSCY)
   db 96, 80, 64, 48, 32, 16, 0, -16, -32, -48, -64, -80, -96
 
-; name ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Fine X scroll ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Shift tile data to right by 1 bit; use SCX to compensate
 
-fine_x_name: db "NYA Fine X scroll", 0
+fine_x_name: db "Fine X scroll", 0
 fine_x_proc:
-  ld b, b
+  ld hl, $8000
+  ld de, 16
+
+  ; Shift entire pattern table right by 1 bit
+  .fine_y_loop:
+    xor a
+    .byteloop:
+      rla
+      rr [hl]
+      rra
+      add hl, de
+      bit 4, h
+      jr z, .byteloop
+    res 4, h  ; stay in blocks 0 and 1
+    or [hl]
+    ld [hl+], a  ; set that last bit and move onto the next fine Y
+    bit 4, l
+    jr z, .fine_y_loop
+
+  ; Add nametable column to show the last pixel on each tile row
+  ld e, 32
+  ldxy hl, 20, 0
+  ld a, l
+  .right_column_loop:
+    ld [hl], a
+    add hl, de
+    add 20
+    jr nc, .right_column_loop
+  ldxy hl, 16, 12
+  ld [hl], d  ; write $00 to the right of tile $FF
+
+  ; Compensate for shift with scroll
+  ld a, 1
+  ldh [rSCX], a
   ret
 
-; name ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Fine Y scroll ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Shift tile data down by 1 row; use SCY to compensate
 
-fine_y_name: db "NYA Fine Y scroll", 0
+def FINE_Y_END equ $8140
+
+fine_y_name: db "Fine Y scroll", 0
 fine_y_proc:
-  ld b, b
-  ret
+  ld hl, $8000
+  .xloop:
+    push hl
+    ld de, 320 - 16
+    .yloop:
+      ; move tile data down by 2 bytes (1 line)
+      ld a, c
+      ld c, [hl]
+      ld [hl+], a
+      ld a, b
+      ld b, [hl]
+      ld [hl+], a
+      ; if at end of tile move to next tile
+      ld a, l
+      and $0F
+      jr nz, .yloop
+      add hl, de
+      bit 4, h
+      jr z, .yloop
+    ; Wrap the last row of tile data to the top of the row
+    pop hl
+    ld a, c
+    ld [hl+], a
+    ld a, b
+    ld [hl-], a
+    ; Move to next column
+    ld de, 16
+    add hl, de
+    ld a, l
+    sub low(FINE_Y_END)
+    ld a, h
+    sbc high(FINE_Y_END)
+    jr c, .xloop
 
+  ; Add last nametable row
+  xor a
+  ldxy hl, 0, 13
+  ld c, 16
+  rst memset_inc
+  ldxy hl, 16, 12
+  ld c, 4
+  rst memset_inc
+  ld a, 1
+  ldh [rSCY], a
+  ret

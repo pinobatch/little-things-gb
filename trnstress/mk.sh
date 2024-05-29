@@ -28,7 +28,7 @@ for f in $gfx2blist $gfxwithnamlist $pb16list; do
   python3 tools/pb16.py "obj/gb/$f.2b" "obj/gb/$f.2b.pb16"
 done
 for f in $borderlist; do
-  python3 tools/borderconv.py "tilesets/${f}_border.png" "obj/gb/$f.border"
+  python3 tools/borderconv.py -v --skip-7f "tilesets/${f}_border.png" "obj/gb/$f.border"
 done
 
 # Allocate variables

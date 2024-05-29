@@ -20,9 +20,9 @@ lets the user choose from a menu.
 11. Coarse X scroll
 12. Coarse Y scroll
 13. Alternating coarse X
-14. tile rows in reverse order
-15. fine X scroll
-16. fine Y scroll
+14. Rows in reverse order
+15. Fine X scroll
+16. Fine Y scroll
 
 Each scramble has four parts:
 
@@ -30,7 +30,7 @@ Each scramble has four parts:
 2. a routine to modify VRAM for CHR_TRN
 3. a routine to modify VRAM for PCT_TRN
 4. a destination register address and sequence of 13 values to write
-   every 8 lines
+   every 8 lines, or NULL to disable
 
 For most, the CHR_TRN and PCT_TRN routines are the same.  For a few,
 they are a matched pair.  If the pointer to the value sequence is not
@@ -143,6 +143,20 @@ copy it to the start of the column ($8000-$8131) and continue to the
 next column.  In the tilemap, copy the tile number greater than 235
 down one.
 
+Additional tests
+----------------
+
+beware has requested one additional test: figuring out which rows of
+the SGB video output get copied to the work RAM buffer during each of
+the four frames after a CHR_TRN or PCT_TRN.
+
+CHR_TRN layout: transparent, black, unused, variable, and digits
+0, 1, 2, and 3.  During each frame, replace the variable tile
+(tile $03) with a copy of tiles $04, $05, $06, or $07.
+
+PCT_TRN layout: During each frame, fill columns 5 and 26 with tile
+number 4, 5, 6, or 7.
+
 Screens
 -------
 
@@ -185,5 +199,3 @@ Cubby alone on the screen, with sprite text overlaid
     instagram.com/yoeynsf
     
     < 1/3 >   B: Exit
-
-### Menu

@@ -64,6 +64,74 @@ def m7_tile_hflip(tile):
     """Flips a stack of one or more rows of packed 8-bit tiles"""
     return b''.join(tile[i:i + 8][::-1] for i in range(0, len(tile), 8))
 
+def im_to_P_lossless(im, maxcolors=256):
+    """Return a copy of an image in indexed color.
+
+maxcolors -- raise ValueError if the image contains more than this
+many colors, or if an existing mode "P" image's indices are greater
+than or equal to this
+"""
+    if im.mode == 'P':
+        max_index = max(im.tobytes())
+        if max_index >= maxcolors:
+            raise ValueError("maximum palette index is (expected less than %d)"
+                             % (max_index, maxcolors))
+        return im.copy()
+
+    allcolors = im.getcolors(maxcolors=maxcolors)
+    if allcolors is None:
+        allcolors = im.getcolors(maxcolors=256)
+        if allcolors is None:
+            raise ValueError("image exceeds 256 colors")
+        raise ValueError("image has %d colors (expected no more than %d)"
+                         % (len(allcolors),))
+    return im.convert("P",
+                      palette=Image.Palette.ADAPTIVE,
+                      dither=Image.Dither.NONE,
+                      colors=maxcolors)
+
+def pack_colorsets(tiles, subpalsize, bgcolor=None, filename=None):
+    """Pack colorsets into subpalettes such that each tile uses one.
+
+tiles -- a list of integer sequences
+subpalsize -- maximum number of distinct non-bgcolor values per tile
+bgcolor -- value to include at start of each subpal
+filename -- if not None, print diagnostics to stderr
+
+Return a list [[bgcolor, color, ...], ...]
+"""
+    # Find the set of colors in each tile, then remove color sets
+    # that are subsets of a larger color set.  Complexity is O(n^2)
+    colorsets = {frozenset(c for c in x if c != bgcolor) for x in tiles}
+    colorsets = sorted(colorsets, key=len)
+    if filename is not None:
+        print("%s: most opaque colors in one tile is %d"
+              % (filename, len(colorsets[-1])), file=sys.stderr)
+    if len(colorsets[-1]) > subpalsize:
+        raise ValueError("too many colors in an 8x8-pixel tile: %d (expected %d)"
+                         % (len(colorsets[-1]), subpalsize))
+    for i, cs in enumerate(colorsets):
+        for cs2 in colorsets[i + 1:]:
+            if cs.issubset(cs2):
+                colorsets[i] = None
+                break
+    ucolorsets = [x for x in colorsets if x is not None]
+    if filename is not None:
+        # the only way to get "1 is not a subset" is if one tile
+        # protrudes into the play area and contains all colors
+        nonsubsets_pl = ("are not subsets" if len(ucolorsets) > 1
+                         else "is not a subset")
+        print("%s: %d unique color sets of which %d %s"
+              % (filename, len(colorsets), len(ucolorsets), nonsubsets_pl),
+              file=sys.stderr)
+
+    # Pack the remaining color sets into palettes
+    job = {"capacity": subpalsize, "tiles": ucolorsets}
+    pages = solve_overload.run(job)
+    pages.decant()
+    subpals = [[bgcolor] + sorted(set().union(*(subpal))) for subpal in pages]
+    return subpals
+
 def parse_argv(argv):
     p = argparse.ArgumentParser()
     p.add_argument("pngname",
@@ -72,6 +140,8 @@ def parse_argv(argv):
                    help="converted border file")
     p.add_argument("-v", "--verbose", action="store_true",
                    help="show statistics about conversion")
+    p.add_argument("--skip-7f", action="store_true",
+                   help="leave tiles $7F and $FF of each CHR_TRN blank")
     return p.parse_args(argv[1:])
 
 def main(argv=None):
@@ -83,24 +153,32 @@ def main(argv=None):
 
     # Load the image
     with Image.open(args.pngname) as im:
-        if im.mode != 'P':
-            raise ValueError("expected palette (P) image; got %s" % (im.mode,))
+        original_mode = im.mode
+        if args.verbose:
+            print("borderconv.py: %s: mode %s, %d by %d pixels"
+                  % (args.pngname, im.mode, *im.size), file=sys.stderr)
         if im.size != (256, 224):
             raise ValueError("expected 256 by 224 pixels; got %d by %d"
                              % im.size)
+        im = im_to_P_lossless(im, maxcolors=subpalsize * max_subpals)
+        if im.mode != 'P':
+            raise ValueError("expected palette (P) image; got %s" % (im.mode,))
         try:
             bgcolor = im.transparency
         except AttributeError:
             bgcolor = None
+        original_bgcolor = bgcolor
+
+        if args.verbose:
+            print("%s: original transparent color is %s"
+                  % (args.pngname, repr(bgcolor)), file=sys.stderr)
+
         tiles = im_to_m7_tiles(im)
         impal = im.getpalette()
         twidth = im.size[0] // 8
 
     # Use the PNG transparent color, or the most common color in
     # the play area if there isn't one
-    if args.verbose:
-        print("PNG transparent color is %s"
-              % repr(bgcolor), file=sys.stderr)
     if bgcolor is None:
         play_area_colors = Counter(b''.join(
             tile
@@ -111,36 +189,29 @@ def main(argv=None):
         ))
         bgcolor = play_area_colors.most_common(1)[0][0]
         if args.verbose:
-            print("detected play area color is %s"
-                  % repr(bgcolor), file=sys.stderr)
+            print("%s: detected play area color is %s"
+                  % (args.pngname, repr(bgcolor)), file=sys.stderr)
 
-    # Find the set of colors in each tile, then remove color sets
-    # that are subsets of a larger color set.  Complexity is O(n^2)
-    colorsets = {frozenset(c for c in x if c != bgcolor) for x in tiles}
-    colorsets = sorted(colorsets, key=len)
-    if args.verbose:
-        print("most opaque colors in one tile: %d"
-              % len(colorsets[-1]), file=sys.stderr)
-    if len(colorsets[-1]) > subpalsize:
-        raise ValueError("too many colors in an 8x8-pixel tile: %d (expected %d)"
-                         % (len(colorsets[-1]), subpalsize))
-    for i, cs in enumerate(colorsets):
-        for cs2 in colorsets[i + 1:]:
-            if cs.issubset(cs2):
-                colorsets[i] = None
-                break
-
-    # Pack the remaining color sets into palettes
-    job = {"capacity": subpalsize, "tiles": [x for x in colorsets if x]}
-    pages = solve_overload.run(job)
-    pages.decant()
-    subpals = [[bgcolor] + sorted(set().union(*(subpal))) for subpal in pages]
+    max_index = max(im.getdata())
+    if max_index <= subpalsize and bgcolor == 0:
+        subpals = [list(range(max_index + 1))]
+        print("%s: using one subpalette of %d colors"
+              % (args.pngname, max_index + 1), file=sys.stderr)
+    else:
+        subpals = pack_colorsets(tiles, subpalsize,
+                                 bgcolor=bgcolor,
+                                 filename=args.pngname if args.verbose else None)
+        # possible to get "1 subpalette" on a mode "P" image if
+        # bgcolor was nonzero or it used nonconsecutive indices
+        # greater than subpalsize
+        if args.verbose:
+            subpals_pl = "subpalettes" if len(subpals) > 1 else "subpalette"
+            print("%s: packed %d %s"
+                  % (args.pngname, len(subpals), subpals_pl),
+                  file=sys.stderr)
     if len(subpals) > max_subpals:
         raise ValueError("too many subpalettes (%d; expected %d)"
                          % (len(tiles4b), max_subpals))
-    if args.verbose:
-        print("image contains %d subpalettes"
-              % len(subpals), file=sys.stderr)
     isubpals = [{v: k for k, v in enumerate(subpal)} for subpal in subpals]
 
     # Initialize tileset with only the transparent tile
@@ -168,6 +239,8 @@ def main(argv=None):
             seentiles[remaptile_hflip[::-1]] = 0x8000 | tileid
             seentiles[remaptile_hflip] = 0x4000 | tileid
             seentiles[remaptile] = tileid
+            if args.skip_7f and len(tiles4b) in (0x7F, 0xFF):
+                tiles4b.append(bytes(32))
         tilemap.append(((palid + first_subpal) << 10) | tileid)
 
     if len(tiles4b) > max_tiles:
@@ -180,8 +253,8 @@ def main(argv=None):
     ctilemap = b''.join(pb16.pb16(btilemap.tobytes()))
 
     if args.verbose:
-        print("%d tiles compress to %d bytes; tilemap compresses to %d bytes"
-              % (len(tiles4b), len(ctiles), len(ctilemap)),
+        print("%s: %d tiles compress to %d bytes; tilemap compresses to %d bytes"
+              % (args.pngname, len(tiles4b), len(ctiles), len(ctilemap)),
               file=sys.stderr)
 
     cramdata = bytearray(32 * len(subpals))
@@ -204,7 +277,7 @@ def main(argv=None):
 if __name__=='__main__':
     if 'idlelib' in sys.modules:
         main("""
-./borderconv.py -v ../tilesets/sameboy.png ../obj/gb/sameboy.border
+./borderconv.py -v ../tilesets/menu_border.png ../obj/gb/menu.border
 """.split())
     else:
         main()

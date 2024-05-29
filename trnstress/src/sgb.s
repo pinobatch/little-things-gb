@@ -190,6 +190,7 @@ sgb_load_trn_tilemap::
   call lcd_off
   ld a, %11100100
   ldh [rBGP], a
+  ldh [rOBP0], a
   ld a, LCDCF_BGON|LCDCF_BLK01|LCDCF_BG9800
   ldh [rLCDC], a
   call clear_scrn0_to_0
