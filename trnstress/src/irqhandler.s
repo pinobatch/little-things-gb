@@ -1,4 +1,7 @@
 include "src/hardware.inc"
+include "src/global.inc"
+
+def TROUBLESHOOT_GOOMBA equ 0
 
 section "stat_wram", WRAM0
 wStatValuesPtr: ds 2
@@ -15,7 +18,7 @@ stat_tail:
   ldh [rLYC], a
   cp 104
   jr c, .not_complete
-    cpl
+    ld a, $FF
     ldh [rLYC], a    ; Cancel STAT IRQ for remainder of frame
   .not_complete:
 
@@ -26,7 +29,7 @@ stat_tail:
   ld h, [hl]
   ld l, a
   ld a, [hl+]
-  ldh [hStatSMC+3], a
+  ldh [hStatSMC+1], a
   ; Update hint table pointer
   ld a, l
   ld [wStatValuesPtr+0], a
@@ -63,7 +66,11 @@ run_dma_tail::
   jr nz, .loop
   ; It's been 159 cycles after the write.  We need 2 more before
   ; we can read the stack again.
-  ret z  ; And the conditional return provides the extra 2.
+  if TROUBLESHOOT_GOOMBA
+    ret
+  else
+    ret z  ; And the conditional return provides the extra 2.
+  endc
 
 ;;
 ; Load a value and write it to an address, and then finish the
@@ -76,18 +83,43 @@ endl
 hramcode_src_end:
 
 section "init_hram_src", ROM0
+setup_raster_for_scramble::
+  ldh a, [hRasterToUse]
+  add a
+  add a
+  add a
+  add 6
+  add low(scrambles)
+  ld l, a
+  adc high(scrambles)
+  sub l
+  ld h, a  ; HL = &scrambles.procs[c]
+  ld a, [hl+]
+  ld h, [hl]
+  ld l, a  ; HL = scrambles.procs[c]
+  fallthrough setup_raster
+
 ;;
 ; Sets up STAT IRQ value table for the next frame.
 ; Precondition: in vblank, and stat_hram already copied to HRAM
-; @param HL pointer to register address then 12 values
-setup_stat_handler:
+; @param HL pointer to register address then 13 values, or 0
+setup_raster::
+  ld a, l
+  or h
+  jr nz, .not_null
+    ; If there is no raster associated with this scramble,
+    ; disable raster for this frame
+    cpl
+    ldh [rLYC], a
+    ret
+  .not_null:
   ld a, [hl+]
-  ldh [hStatSMC+1], a  ; set address
+  ldh [hStatSMC+3], a  ; set address
   ld c, a
   ld a, [hl+]
   ldh [c], a           ; write first value
   ld a, [hl+]
-  ldh [hStatSMC+3], a  ; set second value
+  ldh [hStatSMC+1], a  ; set second value
   ld a, 8
   ldh [rLYC], a        ; set when to write second value
   ld a, l

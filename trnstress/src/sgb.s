@@ -108,6 +108,7 @@ sgb_send::
   and [hl]
   ret z
   ld c,a
+  di
 
 .packetloop:
   ; Start transfer by asserting both halves of the key matrix
@@ -158,20 +159,24 @@ sgb_send::
   ret
 
 ;;
-; Waits about 4 frames for Super Game Boy to have processed a command
-; Ideally, 4 frames is 4*154 = 616 scanlines or 4*154*114 = 70224
-; M-cycles.  But in fact, the guideline might be referring to
-; NTSC Super NES frames, which are 262 scanlines of 68.2 M-cycles
-; each.  Thus we can try waiting 4*262*68.2 = 71473.6 cycles.
-; Each iteration of the inner loop takes 4+3/256 cycles.
-; Thus we wait 71473 / 4 = 17868 iterations.
+; Waits 4 frames for Super Game Boy to have processed a command.
 sgb_wait::
-  ld de, 65536 - 17868
-.loop:
-  inc e
-  jr nz, .loop
-  inc d
-  jr nz, .loop
+  ei
+  call wait_vblank_set_raster
+  call wait_vblank_set_raster
+  call wait_vblank_set_raster
+  fallthrough wait_vblank_set_raster
+wait_vblank_set_raster:
+  call wait_vblank_irq
+  ldh a, [hRasterToUse]
+  or a
+  ret z
+  ; A scramble is in effect. Set up raster.
+  push hl
+  push bc
+  call setup_raster_for_scramble
+  pop bc
+  pop hl
   ret
 
 section "sgbcode", ROM0
@@ -215,6 +220,8 @@ def SGB_BORDER_PALETTE_ADDR EQU $8800
 sgb_send_border::
   push hl
   call sgb_freeze
+  ldh a, [hScrambleToUse]
+  ldh [hRasterToUse], a
   call sgb_load_trn_tilemap
   pop de
 
@@ -308,7 +315,10 @@ sgb_send_border::
   call sgb_scramble_pct
   ;ld b, 0
   ld a, $14<<3|1  ; PCT_TRN
-  fallthrough sgb_send_trn_ab
+  call sgb_send_trn_ab
+  xor a
+  ldh [hRasterToUse], a
+  ret
 
 ;;
 ; Turns on rendering, sends a *_TRN packet with first two bytes

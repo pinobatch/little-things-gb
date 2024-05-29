@@ -60,7 +60,13 @@ memset_tiny::
   jr nz,memset_tiny
   ret
 
-section "memset_inc",ROM0
+section "zerotrap",ROM0[$00]
+zerotrap:
+  ld hl, rSCX
+  inc [hl]
+  jr zerotrap
+
+section "memset_inc", ROM0[$30]
 ;;
 ; Writes C bytes of value A, A+1, ..., A+C-1 starting at HL.
 memset_inc::

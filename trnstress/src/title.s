@@ -7,9 +7,13 @@ include "src/global.inc"
 section "title_screen", ROM0
 show_title_screen::
   call load_title_screen
+  ld a, IEF_VBLANK
+  ldh [rIE], a
   ld a, LCDCF_BGON|LCDCF_BG9800|LCDCF_BLK21|LCDCF_ON
   ldh [rLCDC], a
-
+  xor a
+  ldh [hScrambleToUse], a
+  ldh [hRasterToUse], a
   call sgb_wait
   call sgb_wait
   call sgb_wait
@@ -20,11 +24,8 @@ show_title_screen::
   rra
   jr nc, .skip_load_border
     call sgb_freeze
-    call lcd_off
     ld hl, sgb_title_palette
     call sgb_send
-    xor a
-    ldh [hScrambleToUse], a
     ld hl, title_border
     call sgb_send_border
 
@@ -36,7 +37,7 @@ show_title_screen::
 
   ; Display the title screen 
   lb bc, 88, 16
-  .no_sgb_slidein_loop:
+  .text_slidein_loop:
     push bc
     xor a
     ld [oam_used], a
@@ -70,10 +71,10 @@ show_title_screen::
     .not_credits:
     ldh a, [hCapability]
     rra
-    jr nc, .no_sgb_slidein_loop
+    jr nc, .text_slidein_loop
     ldh a, [hNewKeys]
     and PADF_START
-    jr z, .no_sgb_slidein_loop
+    jr z, .text_slidein_loop
   ret
 
 load_title_screen:

@@ -79,7 +79,7 @@ wait_vblank_run_dma::
   fallthrough run_dma
 run_dma::
   ld a, SOAM >> 8
-  ld bc, (41 << 8) | low(rDMA)
+  lb bc, 41, low(rDMA)
   jr run_dma_tail
 wait_vblank_irq_tail:
   halt

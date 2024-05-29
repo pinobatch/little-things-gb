@@ -12,6 +12,7 @@ def MENU_CUBBY_TILES equ 72
 def MENU_DIGITS_TILE_BASE equ $80 - 12
 ; use a scramble when loading the "Test Cards" border
 def MENU_SCRAMBLE_TO_TEST equ 0
+def MENU_RASTER_TO_TEST equ 0
 def MENU_CURSOR_XPOS equ 44
 def MENU_CURSOR_TILE equ $00
 def LF equ $0A
@@ -22,15 +23,18 @@ hCursorY: ds 1
 section "main_menu", ROM0
 show_scramble_menu::
   call sgb_freeze
-  call lcd_off
   if MENU_SCRAMBLE_TO_TEST
     ld a, MENU_SCRAMBLE_TO_TEST
     ldh [hScrambleToUse], a
   endc
-  xor a
-  ldh [hCursorY], a
   ld hl, menu_border
   call sgb_send_border
+
+  xor a
+  ldh [hCursorY], a
+  ld h, a
+  ld l, a
+  call setup_raster  ; cancel raster from last border
 
   ; 1. Clear tiles and tilemap
   ld de, $8000
@@ -103,9 +107,10 @@ show_scramble_menu::
     jr z, .scramble_name_rowloop
   dec de
   xor a
+  ld [de], a   ; nul terminaton
   ldh [rSCX], a
   ldh [rSCY], a
-  ld [de], a
+  ld b, b
   ld hl, SOAM
   ld c, 160 
   rst memset_tiny
@@ -149,6 +154,13 @@ show_scramble_menu::
     ld b, 0
     call draw_arrow_cursor
     rst wait_vblank_run_dma
+    if MENU_RASTER_TO_TEST
+      ld a, MENU_RASTER_TO_TEST
+      ldh [hScrambleToUse], a
+      call setup_raster_for_scramble
+    endc
+    ld a, IEF_VBLANK|IEF_STAT
+    ldh [rIE], a
     ldh a, [hNewKeys]
     and PADF_A|PADF_START
     jr z, .loop

@@ -6,6 +6,7 @@ export NUM_SCRAMBLES
 
 section "Scramble_select", HRAM
 hScrambleToUse:: ds 1
+hRasterToUse:: ds 1
 
 section "Scramble_procs", ROM0
 
@@ -40,6 +41,7 @@ sgb_run_scramble_proc:
   add a
   add a
   add c
+  calls scrambles
   add low(scrambles)
   ld l, a
   adc high(scrambles)
@@ -56,31 +58,29 @@ sgb_run_scramble_proc:
   jp hl
 
 scrambles::
-  dw null_name, null_proc, null_proc, null_raster
-  dw invbgp_name, invbgp_proc, invbgp_proc, null_raster
-  dw twobitnam_name, twobitnam_chr, twobitnam_pct, null_raster
-  dw twobitbgp_name, twobitbgp_chr, twobitbgp_pct, null_raster
-  dw reversetiles_name, reversetiles_proc, reversetiles_proc, null_raster
-  dw blk21_name, blk21_proc, blk21_proc, null_raster
-  dw nam9c_name, nam9c_proc, nam9c_proc, null_raster
-  dw window_name, window_proc, window_proc, null_raster
-  dw obj8x8_name, obj8x8_proc, obj8x8_proc, null_raster
-  dw obj8x16_name, obj8x16_proc, obj8x16_proc, null_raster
-  dw coarse_x_name, coarse_x_proc, coarse_x_proc, null_raster
-  dw coarse_y_name, coarse_y_proc, coarse_y_proc, null_raster
+  jumptable
+  dw null_name, null_proc, null_proc, 0
+  dw invbgp_name, invbgp_proc, invbgp_proc, 0
+  dw twobitnam_name, twobitnam_chr, twobitnam_pct, 0
+  dw twobitbgp_name, twobitbgp_chr, twobitbgp_pct, 0
+  dw reversetiles_name, reversetiles_proc, reversetiles_proc, 0
+  dw blk21_name, blk21_proc, blk21_proc, 0
+  dw nam9c_name, nam9c_proc, nam9c_proc, 0
+  dw window_name, window_proc, window_proc, 0
+  dw obj8x8_name, obj8x8_proc, obj8x8_proc, 0
+  dw obj8x16_name, obj8x16_proc, obj8x16_proc, 0
+  dw coarse_x_name, coarse_x_proc, coarse_x_proc, 0
+  dw coarse_y_name, coarse_y_proc, coarse_y_proc, 0
   dw alt_coarse_x_name, alt_coarse_x_proc, alt_coarse_x_proc, alt_coarse_x_raster
   dw reverse_y_name, reverse_y_proc, reverse_y_proc, reverse_y_raster
-  dw fine_x_name, fine_x_proc, fine_x_proc, null_raster
-  dw fine_y_name, fine_y_proc, fine_y_proc, null_raster
+  dw fine_x_name, fine_x_proc, fine_x_proc, 0
+  dw fine_y_name, fine_y_proc, fine_y_proc, 0
 
 ; Normal border (null transform) ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 null_name: db "Normal border", 0
 null_proc:
   ret
-null_raster:
-  db low(rSTAT)
-  ds 13, $00
 
 ; Inverted BGP (colors 3210) ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; XOR tile data with $FF and use BGP to compensate
@@ -170,7 +170,6 @@ blk21_proc:
 
 nam9c_name: db "Tilemap at 9C00", 0
 nam9c_proc:
-  ld b, b
   ld a, LCDCF_BGON|LCDCF_BLK01|LCDCF_BG9C00
   ldh [rLCDC], a
   ld hl, $9800
@@ -182,15 +181,49 @@ nam9c_proc:
   ld h, b
   jp memset
 
-; name ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Window tilemap ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; move right 32 pixels at Y=16 through 95 to window
 
-window_name: db "NYA Window tilemap", 0
+def WINDOW_X equ 128
+def WINDOW_Y equ 16
+def WINDOW_WIDTH_TILES equ (160 - WINDOW_X) / 8
+def WINDOW_HEIGHT_TILES equ (96 - WINDOW_Y) / 8
+
+window_name: db "Window tilemap", 0
 window_proc:
-  ld b, b
+  lb bc, WINDOW_WIDTH_TILES, WINDOW_HEIGHT_TILES
+  ldxy de, WINDOW_X / 8, WINDOW_Y / 8
+  .rowloop:
+    push bc
+    ld hl, $9C00 - ($9800 + WINDOW_X / 8 + WINDOW_Y / 8 * 32)
+    add hl, de
+    .tileloop:
+      ld a, [de]
+      ld [hl+], a
+      cpl
+      ld [de], a
+      inc e
+      dec b
+      jr nz, .tileloop
+    ld a, 32 - WINDOW_WIDTH_TILES
+    add e
+    ld e, a
+    adc d
+    sub e
+    ld d, a
+    pop bc
+    dec c
+    jr nz, .rowloop
+  ld a, WINDOW_X + 7
+  ldh [rWX], a
+  ld a, WINDOW_Y
+  ldh [rWY], a
+  ld a, LCDCF_BGON|LCDCF_WINON|LCDCF_BLK01|LCDCF_BG9800|LCDCF_WIN9C00
+  ldh [rLCDC], a
   ret
 
 ; 8-line objects ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; move right 32 by 80 pixels to object plane
+; move top right 32 by 80 pixels to object plane
 
 obj8x8_name: db "NYA 8-line objects", 0
 obj8x8_proc:
@@ -226,7 +259,6 @@ coarse_x_proc:
 
 coarse_y_name: db "Coarse Y scroll", 0
 coarse_y_proc:
-  ld b, b
   ld de, $9800 + 13 * 32 - 12
   .namloop:
     ld hl, 32
@@ -240,11 +272,32 @@ coarse_y_proc:
   ldh [rSCY], a
   ret
 
-; name ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Alternating coarse X ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Shift rows 1, 3, 5, 7, 9, and 11 right by 1 byte and compensate
+; with a raster effect on SCX
 
-alt_coarse_x_name: db "NYA Alternating coarse X", 0
+alt_coarse_x_name: db "Alternating coarse X", 0
 alt_coarse_x_proc:
-  ld b, b
+  ldxy hl, 20, 1
+  lb bc, 20, 6
+  .rowloop:
+    push bc
+    .byteloop:
+      dec hl
+      ld a, [hl+]
+      ld [hl-], a
+      dec b
+      jr nz, .byteloop
+    ld a, 64 + 20
+    ld [hl], a
+    add l
+    ld l, a
+    adc h
+    sub l
+    ld h, a
+    pop bc
+    dec c
+    jr nz, .rowloop
   ret
 alt_coarse_x_raster:
   db low(rSCX)
@@ -253,9 +306,39 @@ alt_coarse_x_raster:
 
 ; name ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-reverse_y_name: db "NYA Rows in reverse order", 0
+reverse_y_name: db "Rows in reverse order", 0
 reverse_y_proc:
-  ld b, b
+  ldxy hl, 0, 0
+  ldxy de, 0, 12
+  lb bc, 20, 6
+  .rowloop:
+    push bc
+    .byteloop:
+      ld c, [hl]
+      ld a, [de]
+      ld [hl+], a
+      ld a, c
+      ld [de], a
+      inc de
+      dec b
+      jr nz, .byteloop
+    ; move HL to next row and DE to previous row
+    ld a, l
+    add 32-20
+    ld l, a
+    adc h
+    sub l
+    ld h, a
+    ld a, e
+    sub 32+20
+    ld e, a
+    jr nc, .no_borrow_d
+      dec d
+    .no_borrow_d:
+
+    pop bc
+    dec c
+    jr nz, .rowloop
   ret
 reverse_y_raster:
   db low(rSCY)

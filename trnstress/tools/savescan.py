@@ -3,7 +3,7 @@
 savescan.py: Static Automatic Variable Earmarker
 local variable allocation for RGBASM
 
-Copyright 2023 Damian Yerrick
+Copyright 2023, 2024 Damian Yerrick
 
 Permission is hereby granted, free of charge, to any person
 obtaining a copy of this software and associated documentation
@@ -380,7 +380,8 @@ Return (opcode, [operand, ...])
         ignored_opcodes = (
             'if', 'else', 'elif', 'endc', 'def', 'include', 'incbin',
             'rept', 'endr', 'dw', 'db', 'ds', 'rsreset', 'rsset', 'assert',
-            'warn', 'fail'
+            'warn', 'fail', 'pusho', 'popo', 'print', 'println',
+            'newcharmap', 'charmap', 'setcharmap', 'pushc', 'popc'
         )
         if opcode in ignored_opcodes: return True
         return False
