@@ -1,25 +1,16 @@
 ;
-; Super Game Boy communication for Border Crossing
-;
-; Copyright 2021, 2022 Damian Yerrick
-; 
-; This software is provided 'as-is', without any express or implied
-; warranty.  In no event will the authors be held liable for any damages
-; arising from the use of this software.
-; 
-; Permission is granted to anyone to use this software for any purpose,
-; including commercial applications, and to alter it and redistribute it
-; freely, subject to the following restrictions:
-; 
-; 1. The origin of this software must not be misrepresented; you must not
-;    claim that you wrote the original software. If you use this software
-;    in a product, an acknowledgment in the product documentation would be
-;    appreciated but is not required.
-; 2. Altered source versions must be plainly marked as such, and must not be
-;    misrepresented as being the original software.
-; 3. This notice may not be removed or altered from any source distribution.
+; Super Game Boy driver for TRN Stress
+; Copyright 2024 Damian Yerrick
+; SPDX-License-Identifier: Zlib
 ;
 include "src/hardware.inc"
+include "src/global.inc"
+
+def SIZEOF_SGB_PACKET EQU 16
+def CHAR_BIT EQU 8
+
+section "wSGBPacketBuffer", WRAM0, ALIGN[5]
+wSGBPacketBuffer:: ds 32
 
 ; Super Game Boy detection ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -68,27 +59,27 @@ detect_sgb::
 
   ; Now turn off 2-player mode
   ld b, 0
-  ; fall through
+  fallthrough sgb_set_bplus1_players
 
 ;;
 ; Set the number of controllers to read to B + 1, where B is
 ; 0, 1, or 3 for 1, 2, or 4 (multitap only) players.
 sgb_set_bplus1_players::
   ld a, ($11 << 3) + 1
-  ; fall through
+  fallthrough sgb_send_ab
 
 ;;
 ; Send a 1-packet SGB command whose first two bytes are A and B
 ; and whose remainder is zero filled.
 sgb_send_ab::
   ld c, 0
-  ; fall through
+  fallthrough sgb_send_abc
 
 ;;
 ; Send a 1-packet SGB command whose first three bytes are A, B, and C
 ; and whose remainder is zero filled.
 sgb_send_abc::
-  ld hl, help_line_buffer
+  ld hl, wSGBPacketBuffer
   push hl
   ld [hl+], a
   ld a, b
@@ -101,15 +92,13 @@ sgb_send_abc::
   pop hl
   jr sgb_send
 
-def SIZEOF_SGB_PACKET EQU 16
-def CHAR_BIT EQU 8
-
 ;;
 ; Clears the Super Game Boy attribute table to 0.
 sgb_send_if_sgb::
   ldh a, [hCapability]
   rra
   ret nc
+  fallthrough sgb_send
 
 ;;
 ; Sends a Super Game Boy packet starting at HL.
@@ -123,12 +112,23 @@ sgb_send::
   ld a,$07
   and [hl]
   ret z
-  ld c,a
+  ld c, a
+  .packetloop:
+    call sgb_send_now
+    call sgb_wait
+    dec c
+    jr nz,.packetloop
+  ret
 
-.packetloop:
+;;
+; Send a packet without waiting afterward.
+; Useful if you have your own packet queue timed off vblank or if
+; you're testing what happens while SGB is receiving a transfer.
+sgb_send_now::
   ; Start transfer by asserting both halves of the key matrix
   ; momentarily.  (This is like strobing an NES controller.)
   xor a
+  di
   ldh [rP1],a
   ld a,$30
   ldh [rP1],a
@@ -148,13 +148,13 @@ sgb_send::
   ; which takes 1 mcycle longer to send a 0 then a 1.
   ld a,$10
   jr c, .bitIs1
-  add a,a ; ld a,$20
-.bitIs1:
+    add a, a  ; ld a,$20
+  .bitIs1:
   ldh [rP1],a
   ld a,$30
   ldh [rP1],a
 
-  ldh a, [rIE]  ; Burn 3 cycles to retain original loops's speed
+  ldh a, [rIE]  ; Burn 3 cycles to retain original loop's speed
 
   ; Advance D to next bit (this is like NES MMC1)
   srl d
@@ -162,44 +162,48 @@ sgb_send::
   dec b
   jr nz,.byteloop
 
-  ; Send $20 $30 as end of packet
+  ; Send $20 $30 as end of packet and reenable interrupts
   ld a,$20
   ldh [rP1],a
   ld a,$30
   ldh [rP1],a
-
-  call sgb_wait
-  dec c
-  jr nz,.packetloop
-  ret
+  reti
 
 ;;
-; Waits about 4 frames for Super Game Boy to have processed a command
-; Ideally, 4 frames is 4*154 = 616 scanlines or 4*154*114 = 70224
-; M-cycles.  But in fact, the guideline might be referring to
-; NTSC Super NES frames, which are 262 scanlines of 68.2 M-cycles
-; each.  Thus we can try waiting 4*262*68.2 = 71473.6 cycles.
-; Each iteration of the inner loop takes 4+3/256 cycles.
-; Thus we wait 71473 / 4 = 17868 iterations.
+; Waits 4 frames for Super Game Boy to have processed a command.
 sgb_wait::
-  ld de, 65536 - 17868
-.loop:
-  inc e
-  jr nz, .loop
-  inc d
-  jr nz, .loop
+  ei
+  call wait_vblank_set_raster
+  call wait_vblank_set_raster
+  call wait_vblank_set_raster
+  fallthrough wait_vblank_set_raster
+wait_vblank_set_raster:
+  call wait_vblank_irq
+  ldh a, [hRasterToUse]
+  or a
+  ret z
+  ; A scramble is in effect. Set up raster.
+  push hl
+  push bc
+  call setup_raster_for_scramble
+  pop bc
+  pop hl
   ret
 
-section "sgbcode", ROM0
+section "sgb_trn", ROM0
 
 ;;
 ; Turns off the LCD, sets scroll to 0, sets BGP to identity ($E4),
-; and sets up an identity tilemap in _SCRN0 for Super Game Boy
-; *_TRN commands.  (Clobbers entire _SCRN0.)
+; turns off objects and window, sets BG pattern to $8000/$8800 and
+; tilemap base to _SCRN0, and sets up an identity tilemap in _SCRN0
+; for Super Game Boy *_TRN commands.  (Clobbers entire _SCRN0.)
 sgb_load_trn_tilemap::
   call lcd_off
   ld a, %11100100
   ldh [rBGP], a
+  ldh [rOBP0], a
+  ld a, LCDCF_BGON|LCDCF_BLK01|LCDCF_BG9800
+  ldh [rLCDC], a
   call clear_scrn0_to_0
   ld hl, _SCRN0+640
   push hl
@@ -212,7 +216,6 @@ sgb_load_trn_tilemap::
   ld de, _SCRN0
   jp load_full_nam
 
-
 def SGB_BORDER_COLS EQU 32
 def SGB_BORDER_ROWS EQU 28
 def SIZEOF_SGB_BORDER_TILEMAP EQU SGB_BORDER_ROWS * 2 * SGB_BORDER_COLS
@@ -220,7 +223,7 @@ def SIZEOF_SGB_BORDER_PALETTE EQU 16 * 2 * 3
 def SGB_BORDER_PALETTE_ADDR EQU $8800
 
 ;;
-; Sends a border consisting of the following:
+; Sends a NORMAL border consisting of the following:
 ; 1. unique tile count minus 1
 ; 2. 1-256 4bpp tiles compressed with PB16
 ; 3. 1792 bytes of tilemap compressed with PB16
@@ -229,6 +232,8 @@ def SGB_BORDER_PALETTE_ADDR EQU $8800
 sgb_send_border::
   push hl
   call sgb_freeze
+  ldh a, [hScrambleToUse]
+  ldh [hRasterToUse], a
   call sgb_load_trn_tilemap
   pop de
 
@@ -241,16 +246,19 @@ sgb_send_border::
     add 2
     ld b, a
     call pb16_unpack_to_CHRRAM0
-    ; ld b, 0  ; guaranteed by pb16_unpack
+    call sgb_scramble_chr
+    ;ld b, 0  ; B=0: load first half
     jr .do_final_CHR_TRN
   .is_2_chr_trns:
     ; First half is 4K
     push af
     ld b, low(128 * 32 / 16)
     call pb16_unpack_to_CHRRAM0
+    call sgb_scramble_chr
     ld a, $13<<3|1
     push de
     call sgb_send_trn_ab
+    call sgb_load_trn_tilemap
     pop de
     pop af
 
@@ -258,12 +266,13 @@ sgb_send_border::
     add 2
     ld b, a
     call pb16_unpack_to_CHRRAM0
-    ; ld b, 0
-    inc b
+    call sgb_scramble_chr
+    inc b  ; B=1: load second half
   .do_final_CHR_TRN:
   ld a, $13<<3|1
   push de
   call sgb_send_trn_ab
+  call sgb_load_trn_tilemap
   pop de
 
   ; Unpack tilemap and copy palette
@@ -315,17 +324,22 @@ sgb_send_border::
   ld de, SGB_BORDER_PALETTE_ADDR
   ld c, SIZEOF_SGB_BORDER_PALETTE
   call memcpy
-  ; ld b, 0  ; guaranteed by memcpy
+  call sgb_scramble_pct
+  ;ld b, 0
   ld a, $14<<3|1  ; PCT_TRN
-  ; fall through to sgb_send_trn_ab
+  call sgb_send_trn_ab
+  xor a
+  ldh [hRasterToUse], a
+  ret
 
 ;;
 ; Turns on rendering, sends a *_TRN packet with first two bytes
 ; A and B, and turns rendering back off.
 sgb_send_trn_ab::
   ld l, a
-  ld a,LCDCF_ON|LCDCF_BGON|LCDCF_BG8000|LCDCF_BG9800
-  ldh [rLCDC],a
+  ldh a, [rLCDC]
+  or LCDCF_ON
+  ldh [rLCDC], a
   ld a, l
   call sgb_send_ab
   jp lcd_off

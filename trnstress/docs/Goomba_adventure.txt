@@ -1,0 +1,40 @@
+The only way to figure out why TRN Stress fails in Goomba Color, a
+Game Boy emulator for Game Boy Advance, is to debug the emulator
+*in* an emulator.  I used mGBA to figure out what was going on.
+
+First I located HRAM (GB $FF80) by searching for the OAM DMA routine.
+It's at GBA 0x03007688 in IWRAM, and accessed relative to the base of
+I/O and HRAM at 0x03007608 in r1 with offset 0x85 in r2.  GB WRAM is
+8K before that, at 0x03005688.
+
+I located ROM by searching for the logo.  I found the first 16K at
+0600FE00 in VRAM, which turned out to be bank_1 in cache.c.
+
+equates.h has a mapping between ARM and SM83 registers
+r3: F
+r4: A
+r5: BC
+r6: DE
+r7: HL
+r8: cycles
+r9: PC translated to GBA memory
+r11: SP
+
+I noticed that the SGB detection was getting corrupted in HRAM.
+I set an mGBA watchpoint on writes to GBA RAM corresponding to HRAM:
+ff85 (hVblanks) at 0300768d and ff86 (hCapability) at 0300768e.
+Once I decoded what the opcode was, I realized an unintended call to
+memset_inc was clobbering much of HRAM.  The linker turned out to
+have placed memset_inc at $0000.  I moved it up to $0030 and put a
+more obvious halt routine there.  Goomba got stuck in the $0000 trap.
+
+While Goomba was stuck in the trap, SP was stabilized.  The address
+at top of stack was right after a call to wait_vblank_run_dma.
+I translated 0018 to GBA address 0x0600FE18 and set a watchpoint
+there.  I watched it fetch opcodes and saw it perform a relative jump
+(JR run_dma_tail) into VRAM just before the start of ROM.  The data
+in that part of VRAM had been cleared by GBA BIOS to $00 values,
+which Goomba interprets as a NOP slide ending at $0000.
+
+Lesson learned: If an IRQ or RST handler JRs to HRAM, Goomba will
+NOP-slide into $0000.
