@@ -72,4 +72,16 @@ macro lb
   ld \1, low(\2) << 8 | low(\3)
 endm
 
+; cp144p ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+def LF equ $0A
+def A_BUTTON_SYMBOL equ $1C
+def B_BUTTON_SYMBOL equ $1C
+def COPR_SYMBOL equ $1A
+def RIGHT_ARROW equ $1C
+def LEFT_ARROW equ $1D
+def UP_ARROW equ $1E
+def DOWN_ARROW equ $1F
+def DPAD_SYMBOL equ $7F
+
 endc

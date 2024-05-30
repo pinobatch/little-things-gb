@@ -61,7 +61,7 @@ scrambles::
   jumptable
   dw null_name, null_proc, null_proc, 0
   dw invbgp_name, invbgp_proc, invbgp_proc, 0
-  dw twobitnam_name, twobitnam_chr, twobitnam_pct, 0
+  dw twobitnam_name, twobitnam_chr, null_proc, 0
   dw twobitbgp_name, twobitbgp_chr, twobitbgp_pct, 0
   dw reversetiles_name, reversetiles_proc, reversetiles_proc, 0
   dw blk21_name, blk21_proc, blk21_proc, 0
@@ -98,27 +98,130 @@ invbgp_proc:
   ldh [rBGP], a
   ret
 
-; name ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; 2bpp via tilemap ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; For CHR_TRN, shift the tile data around to keep only even-numbered
+; tiles, and blank the second half of CHR RAM.  Then shift even
+; tilemap entries to the right and FF out odd tilemap entries.
+; Do nothing to PCT_TRN.
 
-twobitnam_name: db "NYA 2bpp via tilemap", 0
+twobitnam_name: db "2bpp via tilemap", 0
 twobitnam_chr:
-  ld b, b
-  ret
-twobitnam_pct:
-  ld b, b
+  ; Keep only even tiles (containing bit planes 0-1)
+  ld de, $8010
+  .chrtileloop:
+    ; calculate source address
+    ld l, e
+    ld h, d
+    add hl, hl
+    set 7, h
+    .chrbyteloop:
+      ld a, [hl+]
+      ld [de], a
+      inc de
+      ld a, l
+      and $0F
+      jr nz, .chrbyteloop
+    bit 3, d  ; was $8800 reached?
+    jr z, .chrtileloop
+
+  ; Remove odd tiles
+  ld a, d
+  ld h, d
+  ld l, e
+  ld c, e
+  .oddloop:
+    rst memset_inc
+    rrca
+    bit 4, h
+    jr z, .oddloop
+
+  ; Blank tile $FF
+  ld hl, $8FF0
+  xor a
+  ld c, 16
+  rst memset_tiny
+
+  ; Adjust the tilemap to compensate
+  ld hl, _SCRN0
+  ld a, $FF
+  .namloop:
+    srl [hl]
+    inc hl
+    ld [hl+], a
+    bit 1, h  ; was $9A00 reached?
+    jr z, .namloop
   ret
 
-; name ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; 2bpp via BGP ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; For CHR_TRN, copy odd bytes of even tiles 15 bytes later, then
+; clobber all even bytes.  For PCT_TRN, keep only colors 1, 4, and 5,
+; and set the other colors to some value that stands out.
 
-twobitbgp_name: db "NYA 2bpp via BGP", 0
+def NONO_COLOR equ $7E00  ; R=31 G=0 B=0
+
+twobitbgp_name: db "2bpp via BGP", 0
 twobitbgp_chr:
-  ld b, b
-  ret
-twobitbgp_pct:
-  ld b, b
+
+  ; Copy bit plane 1 of each tile to bit plane 2
+  ld de, $8001
+  .chrtileloop:
+    ld hl, 15
+    add hl, de
+    .chrbyteloop:
+      ld a, [de]
+      inc de
+      inc de
+      ld [hl+], a
+      inc hl
+      bit 4, e  ; is bit plane 1 complete?
+      jr z, .chrbyteloop
+    ld e, l
+    ld d, h
+    inc e
+    bit 4, d  ; has $9001 been reached?
+    jr z, .chrtileloop
+
+  ; Trash bit planes 1 and 3 with CRC8 output
+  ld hl, $8001
+  ld a, h
+  .chrtrashloop:
+    ld [hl+], a
+    inc hl
+    add a
+    jr nc, .trash_nocarry
+      xor $07
+    .trash_nocarry:
+    bit 4, h  ; has $9001 been reached?
+    jr z, .chrtrashloop
+
+  ld a, %01000100  ; turn colors 2 and 3 into 0 and 1
+  ldh [rBGP], a    ; disregarding bitplane 0
   ret
 
-; name ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+twobitbgp_pct:
+  ; Save palette colors 2 and 3
+  ld hl, $8804
+  ld de, $8904
+  ld bc, 4
+  call memcpy
+
+  ; Trash the rest of the palette
+  ld b, 48 - 4
+  .set_nono_loop:
+    ld a, low(NONO_COLOR)
+    ld [hl+], a
+    ld a, high(NONO_COLOR)
+    ld [hl+], a
+    dec b
+    jr nz, .set_nono_loop
+
+  ; Copy colors 2 and 3 back in as 4 and 5
+  ld hl, $8904
+  dec d    ; DE = $8808
+  ld c, l  ; BC = $0004
+  jp memcpy
+
+; Tiles in reverse order ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; exchange tile at $8000 with $8FF0, $8010 with $8FE0, etc.
 ; and use the tilemap to compensate
 

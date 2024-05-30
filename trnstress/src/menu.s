@@ -6,16 +6,19 @@ def MENU_ITEM_YPOS equ 8
 def vMenuLabelsScratch equ $9A40
 def MENU_CUBBY_WIDTH equ 7
 def MENU_CUBBY_HEIGHT equ 12
+def MENU_BLANK_TILE equ $80
+def MENU_CUBBY_BASE_TILE equ $80
 def MENU_CUBBY_X equ 0
 def MENU_CUBBY_Y equ 3
 def MENU_CUBBY_TILES equ 70
-def MENU_DIGITS_TILE_BASE equ $80 - 12
-; use a scramble when loading the "Test Cards" border
-def MENU_SCRAMBLE_TO_TEST equ 0
-def MENU_RASTER_TO_TEST equ 0
+def MENU_DIGITS_TILE_BASE equ $80 - 18
 def MENU_CURSOR_XPOS equ 44
 def MENU_CURSOR_TILE equ $00
-def LF equ $0A
+def MENU_EXTRA_ROWS equ 1  ; in addition to NUM_SCRAMBLES
+
+; for testing: use a scramble when loading the "Test Cards" border
+def MENU_SCRAMBLE_TO_TEST equ 0
+def MENU_RASTER_TO_TEST equ 0
 
 section "hCursorY", HRAM
 hCursorY:: ds 1
@@ -41,14 +44,14 @@ show_scramble_menu::
   ld bc, $1800
   call memset
   ld b, high($300)
-  ld h, $7F
+  ld h, MENU_BLANK_TILE
   call memset
   ld a, %01101100
   ldh [rBGP], a
 
   ; 2. Load smaller Cubby
   ld de, menu_cubby_pb16
-  ld hl, $8800
+  ld hl, $8000 | (MENU_CUBBY_BASE_TILE << 4)
   ld b, MENU_CUBBY_TILES
   call pb16_unpack_block
   ld hl, menu_cubby_nam
@@ -69,7 +72,7 @@ show_scramble_menu::
     ld [hl], MENU_DIGITS_TILE_BASE
     add hl, de
     inc a
-    cp MENU_DIGITS_TILE_BASE + 2 + (NUM_SCRAMBLES - 10)
+    cp MENU_DIGITS_TILE_BASE + 2 + (NUM_SCRAMBLES + MENU_EXTRA_ROWS - 10)
     jr c, .numlabels_loop
 
   ; 4. Draw scramble names at (115, 8i+1)
@@ -117,7 +120,7 @@ show_scramble_menu::
   rst memset_tiny
 
   ; draw the labels
-  ld de, ($8800 >> 4) + MENU_CUBBY_TILES
+  ld de, ($8000 >> 4) + MENU_CUBBY_BASE_TILE + MENU_CUBBY_TILES
   ld hl, vMenuLabelsScratch
   call vwfDrawLabels
   ld b, 0
@@ -150,7 +153,7 @@ show_scramble_menu::
     jr z, .not_up
       dec a
     .not_up:
-    cp NUM_SCRAMBLES
+    cp NUM_SCRAMBLES + MENU_EXTRA_ROWS
     jr nc, .no_writeback
       ldh [hCursorY], a
     .no_writeback:
@@ -211,7 +214,8 @@ menu_digit_labels:
   db  57,  48, "6.", LF
   db  57,  56, "7.", LF
   db  57,  64, "8.", LF
-  db  57,  72, "9.", 0
+  db  57,  72, "9.", LF
+  db  67, 136, "Frame timing", 0
 
 menu_border: incbin  "obj/gb/menu.border"
 menu_cubby_nam:    incbin "obj/gb/menu_cubby.nam"

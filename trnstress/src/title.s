@@ -234,8 +234,6 @@ title_cubby_pb16:   incbin "obj/gb/title_cubby.2b.pb16"
 title_letters_pb16: incbin "obj/gb/title_letters.2b.pb16"
 title_border: incbin  "obj/gb/title.border"
 
-def COPR_SYMBOL = $1A
-def LF = $0A
 copr_notice_labels:
   db 89, 112, COPR_SYMBOL, " 2024", LF
   db 89, 120, "Damian Yerrick", LF

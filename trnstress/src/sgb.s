@@ -4,8 +4,8 @@ include "src/global.inc"
 def SIZEOF_SGB_PACKET EQU 16
 def CHAR_BIT EQU 8
 
-section "help_line_buffer", WRAM0, ALIGN[5]
-help_line_buffer: ds 32
+section "wSGBPacketBuffer", WRAM0, ALIGN[5]
+wSGBPacketBuffer:: ds 32
 
 ; Super Game Boy detection ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -74,7 +74,7 @@ sgb_send_ab::
 ; Send a 1-packet SGB command whose first three bytes are A, B, and C
 ; and whose remainder is zero filled.
 sgb_send_abc::
-  ld hl, help_line_buffer
+  ld hl, wSGBPacketBuffer
   push hl
   ld [hl+], a
   ld a, b
@@ -107,13 +107,23 @@ sgb_send::
   ld a,$07
   and [hl]
   ret z
-  ld c,a
-  di
+  ld c, a
+  .packetloop:
+    call sgb_send_now
+    call sgb_wait
+    dec c
+    jr nz,.packetloop
+  ret
 
-.packetloop:
+;;
+; Send a packet without waiting afterward.
+; Useful if you have your own packet queue timed off vblank or if
+; you're testing what happens while SGB is receiving a transfer.
+sgb_send_now::
   ; Start transfer by asserting both halves of the key matrix
   ; momentarily.  (This is like strobing an NES controller.)
   xor a
+  di
   ldh [rP1],a
   ld a,$30
   ldh [rP1],a
@@ -133,13 +143,13 @@ sgb_send::
   ; which takes 1 mcycle longer to send a 0 then a 1.
   ld a,$10
   jr c, .bitIs1
-  add a,a ; ld a,$20
-.bitIs1:
+    add a, a  ; ld a,$20
+  .bitIs1:
   ldh [rP1],a
   ld a,$30
   ldh [rP1],a
 
-  ldh a, [rIE]  ; Burn 3 cycles to retain original loops's speed
+  ldh a, [rIE]  ; Burn 3 cycles to retain original loop's speed
 
   ; Advance D to next bit (this is like NES MMC1)
   srl d
@@ -147,16 +157,12 @@ sgb_send::
   dec b
   jr nz,.byteloop
 
-  ; Send $20 $30 as end of packet
+  ; Send $20 $30 as end of packet and reenable interrupts
   ld a,$20
   ldh [rP1],a
   ld a,$30
   ldh [rP1],a
-
-  call sgb_wait
-  dec c
-  jr nz,.packetloop
-  ret
+  reti
 
 ;;
 ; Waits 4 frames for Super Game Boy to have processed a command.
@@ -179,7 +185,7 @@ wait_vblank_set_raster:
   pop hl
   ret
 
-section "sgbcode", ROM0
+section "sgb_trn", ROM0
 
 ;;
 ; Turns off the LCD, sets scroll to 0, sets BGP to identity ($E4),

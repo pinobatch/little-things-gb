@@ -18,6 +18,12 @@ main::
     ld [rROMB0], a
     call show_scramble_menu
 
+    cp NUM_SCRAMBLES
+    jr c, .is_scramble
+      call run_frame_timing
+      jr .menu_loop
+    .is_scramble:
+
     ; Load this border with this scramble
     ldh [hScrambleToUse], a
     call border_get_address

@@ -3,12 +3,13 @@ set -e
 
 title=trnstress
 inttitle='TRN STRESS'
-objlist="init irqhandler main title menu scramble borders \
+objlist="init irqhandler main title menu scramble borders frame_timing \
   pads ppuclear sgb unpb16 vwfdraw vwflabels"
 
 genobjlist='vwf7_cp144p localvars'
 gfxwithnamlist='title_cubby menu_cubby'
 gfx2blist='title_letters'
+gfx4blist='frame_timing_tiles'
 pb16list=''
 borderlist="title menu Batten_Scrapefoot Lowneys_cocoa Newell_Tilly \
   Pughe_Harmless Caldecott_she-bear"
@@ -25,11 +26,17 @@ done
 for f in $gfx2blist; do
   rgbgfx -o "obj/gb/$f.2b" "@tilesets/$f.flags" "tilesets/$f.png"
 done
+for f in $gfx4blist; do
+  python3 tools/pilbmp2nes.py --planes "0,1;2,3" "tilesets/$f.png" "obj/gb/$f.4b"
+done
 for f in $gfx2blist $gfxwithnamlist $pb16list; do
   python3 tools/pb16.py "obj/gb/$f.2b" "obj/gb/$f.2b.pb16"
 done
+for f in $gfx4blist; do
+  python3 tools/pb16.py "obj/gb/$f.4b" "obj/gb/$f.4b.pb16"
+done
 for f in $borderlist; do
-  python3 tools/borderconv.py -v --skip-7f "tilesets/${f}_border.png" "obj/gb/$f.border"
+  python3 tools/borderconv.py --skip-7f "tilesets/${f}_border.png" "obj/gb/$f.border"
 done
 
 # Allocate variables
