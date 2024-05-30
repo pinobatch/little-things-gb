@@ -4,9 +4,10 @@
 include "src/hardware.inc"
 include "src/global.inc"
 
-section "title_screen", ROM0
+section "title_screen", ROMX,BANK[1]
 show_title_screen::
   call load_title_screen
+
   ld a, IEF_VBLANK
   ldh [rIE], a
   ld a, LCDCF_BGON|LCDCF_BG9800|LCDCF_BLK21|LCDCF_ON
@@ -105,7 +106,16 @@ load_title_screen:
   ld hl, copr_notice_labels
   call vwfDrawLabels
 
-  ; 5. Set registers other than LCDC
+  ; 5. Detection of junior-league emulators that incorrectly
+  ; process relative jumps from low ROM to HRAM
+  call run_dma
+  ld de, $8800 >> 4
+  ld hl, jr_league_labels
+  ldh a, [hCapability]
+  cp CAPABILITY_ZEROTRAP
+  call z, vwfDrawLabels
+
+  ; 6. Set registers other than LCDC
   ld a, %10001101
   ldh [rBGP], a
   ld a, %11010000
@@ -219,7 +229,6 @@ show_credits:
     jr z, .loop
   ret
 
-section "title_screen_data", ROM0
 title_cubby_nam:    incbin "obj/gb/title_cubby.nam"
 title_cubby_pb16:   incbin "obj/gb/title_cubby.2b.pb16"
 title_letters_pb16: incbin "obj/gb/title_letters.2b.pb16"
@@ -228,9 +237,13 @@ title_border: incbin  "obj/gb/title.border"
 def COPR_SYMBOL = $1A
 def LF = $0A
 copr_notice_labels:
-  db 96, 112, COPR_SYMBOL, " 2024", LF
-  db 96, 120, "Damian Yerrick", LF
-  db 96, 128, "Select: credits", 0
+  db 89, 112, COPR_SYMBOL, " 2024", LF
+  db 89, 120, "Damian Yerrick", LF
+  db 89, 128, "Select: credits", 0
+
+jr_league_labels:
+  db 89, 8, "This emulator is", LF
+  db 89, 16, "junior league!", 0
 
 sgb_title_palette:
   db $00<<3|1

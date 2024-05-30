@@ -195,8 +195,9 @@ def main(argv=None):
     max_index = max(im.getdata())
     if max_index <= subpalsize and bgcolor == 0:
         subpals = [list(range(max_index + 1))]
-        print("%s: using one subpalette of %d colors"
-              % (args.pngname, max_index + 1), file=sys.stderr)
+        if args.verbose:
+            print("%s: using one subpalette of %d colors"
+                  % (args.pngname, max_index + 1), file=sys.stderr)
     else:
         subpals = pack_colorsets(tiles, subpalsize,
                                  bgcolor=bgcolor,
@@ -211,7 +212,7 @@ def main(argv=None):
                   file=sys.stderr)
     if len(subpals) > max_subpals:
         raise ValueError("too many subpalettes (%d; expected %d)"
-                         % (len(tiles4b), max_subpals))
+                         % (len(subpals), max_subpals))
     isubpals = [{v: k for k, v in enumerate(subpal)} for subpal in subpals]
 
     # Initialize tileset with only the transparent tile

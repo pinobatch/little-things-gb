@@ -1,6 +1,9 @@
 include "src/hardware.inc"
 include "src/global.inc"
 
+def CAPABILITY_ZEROTRAP equ "Z"
+export CAPABILITY_ZEROTRAP
+
 section "hState", HRAM
 hCapability::    ds 1
 
@@ -61,10 +64,20 @@ memset_tiny::
   ret
 
 section "zerotrap",ROM0[$00]
+;;
+; Writes a constant value to hCapability.
+;
+; Some low-tier emulators, such as Goomba Color, cannot jump
+; relative (JR instruction) from the IRQ/RST area in low ROM
+; ($0000-$007F) to HRAM ($FF80-$FFFF).  Instead, they take a shortcut
+; when calculating the jump target and land somewhere in host RAM
+; just before the start oF guest ROM.  Fortunately, Goomba fills
+; this area with $00 bytes, which correspond to NOP instructions.
+; Other emulators may not be as lucky.
 zerotrap:
-  ld hl, rSCX
-  inc [hl]
-  jr zerotrap
+  ld a, CAPABILITY_ZEROTRAP
+  ldh [hCapability], a
+  ret
 
 section "memset_inc", ROM0[$30]
 ;;

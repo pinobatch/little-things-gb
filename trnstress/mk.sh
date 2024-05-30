@@ -3,14 +3,15 @@ set -e
 
 title=trnstress
 inttitle='TRN STRESS'
-objlist="init irqhandler main title menu scramble \
+objlist="init irqhandler main title menu scramble borders \
   pads ppuclear sgb unpb16 vwfdraw vwflabels"
 
 genobjlist='vwf7_cp144p localvars'
 gfxwithnamlist='title_cubby menu_cubby'
 gfx2blist='title_letters'
 pb16list=''
-borderlist='title menu'
+borderlist="title menu Batten_Scrapefoot Lowneys_cocoa Newell_Tilly \
+  Pughe_Harmless Caldecott_she-bear"
 
 mkdir -p obj/gb
 
@@ -46,4 +47,4 @@ objlisto=$(printf "obj/gb/%s.o " $objlist $genobjlist)
 # Build ROM
 "${RGBDS}rgblink" -d -o $title.gb -n trnstress.sym -p 0xFF \
   $objlisto
-"${RGBDS}rgbfix" -jvsl 0x33 -t "$inttitle" -k "P8" -p 0xFF $title.gb
+"${RGBDS}rgbfix" -jvsl 0x33 -m "MBC5" -t "$inttitle" -k "P8" -p 0xFF $title.gb

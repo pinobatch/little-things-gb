@@ -18,9 +18,9 @@ def MENU_CURSOR_TILE equ $00
 def LF equ $0A
 
 section "hCursorY", HRAM
-hCursorY: ds 1
+hCursorY:: ds 1
 
-section "main_menu", ROM0
+section "main_menu", ROMX,BANK[1]
 show_scramble_menu::
   call sgb_freeze
   if MENU_SCRAMBLE_TO_TEST
@@ -31,7 +31,6 @@ show_scramble_menu::
   call sgb_send_border
 
   xor a
-  ldh [hCursorY], a
   ld h, a
   ld l, a
   call setup_raster  ; cancel raster from last border
@@ -201,8 +200,6 @@ draw_arrow_cursor:
   xor a
   ld [hl+], a
   ret
-  
-section "main_menu_data", ROM0
 
 menu_digit_labels:
   db  52,  80, "10.", LF
