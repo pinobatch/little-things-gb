@@ -1,8 +1,12 @@
 ;
 ; Title and credits screens for TRN Stress
+; Copyright 2024 Damian Yerrick
+; SPDX-License-Identifier: Zlib
 ;
 include "src/hardware.inc"
 include "src/global.inc"
+
+def COPR_NOTICE_BASE_TILE equ $B0
 
 section "title_screen", ROMX,BANK[1]
 show_title_screen::
@@ -102,7 +106,7 @@ load_title_screen:
   call pb16_unpack_block
 
   ; 4. Draw small text
-  ld de, $8BC0 >> 4
+  ld de, $8000 >> 4 | COPR_NOTICE_BASE_TILE
   ld hl, copr_notice_labels
   call vwfDrawLabels
 
@@ -209,13 +213,16 @@ show_credits:
   ; 1. Clear tiles and tilemap
   ld de, $8800
   ld h, e
-  ld bc, $1B00
+  ld bc, $1000
+  call memset
+  ld h, $80
+  ld b, $03
   call memset
   ld a, %11111100
   ldh [rBGP], a
 
   ; 4. Draw small text
-  ld de, $8800 >> 4
+  ld de, $8810 >> 4
   ld hl, credits_labels
   call vwfDrawLabels
 
@@ -233,11 +240,6 @@ title_cubby_nam:    incbin "obj/gb/title_cubby.nam"
 title_cubby_pb16:   incbin "obj/gb/title_cubby.2b.pb16"
 title_letters_pb16: incbin "obj/gb/title_letters.2b.pb16"
 title_border: incbin  "obj/gb/title.border"
-
-copr_notice_labels:
-  db 89, 112, COPR_SYMBOL, " 2024", LF
-  db 89, 120, "Damian Yerrick", LF
-  db 89, 128, "Select: credits", 0
 
 jr_league_labels:
   db 89, 8, "This emulator is", LF
@@ -283,11 +285,3 @@ title_press_start_labels:
   db 72, 88, "Press Start", $FF
   db $FF
 setcharmap main
-
-credits_labels:
-  db   8,   8, "Program by Damian Yerrick", LF
-  db   8,  16, "pineight.com", LF
-  db   8,  32, "Cubby character based on a", LF
-  db   8,  40, "design by yoeynsf", LF
-  db   8,  48, "instagram.com/yoeynsf", LF
-  db   8, 128, "B: Back   Start: Menu", 0

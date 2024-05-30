@@ -1,3 +1,8 @@
+;
+; Scrambling methods for TRN Stress
+; Copyright 2024 Damian Yerrick
+; SPDX-License-Identifier: Zlib
+;
 include "src/hardware.inc"
 include "src/global.inc"
 
@@ -454,7 +459,6 @@ obj8x16_proc:
     jr z, .obj_even
       add 20
     .obj_even:
-    ld b, b
     add 12
     ld [hl+], a    ; tile number
     xor a

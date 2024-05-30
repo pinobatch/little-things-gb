@@ -3,10 +3,13 @@ set -e
 
 title=trnstress
 inttitle='TRN STRESS'
-objlist="init irqhandler main title menu scramble borders frame_timing \
-  pads ppuclear sgb unpb16 vwfdraw vwflabels"
 
+objlist="init irqhandler main title menu scramble frame_timing \
+  pads ppuclear sgb unpb16 vwfdraw vwflabels"
 genobjlist='vwf7_cp144p localvars'
+objlistfull='borders'
+objlist32k='borders32k'
+
 gfxwithnamlist='title_cubby menu_cubby'
 gfx2blist='title_letters'
 gfx4blist='frame_timing_tiles'
@@ -40,18 +43,23 @@ for f in $borderlist; do
 done
 
 # Allocate variables
-python3 tools/savescan.py -o obj/gb/localvars.s src/*.s
+objlist_save=$(printf "src/%s.s " $objlist $objlistfull)
+objlist_o=$(printf "obj/gb/%s.o " $objlist $objlistfull $genobjlist)
+objlist32k_o=$(printf "obj/gb/%s.o " $objlist $objlist32k $genobjlist)
+python3 tools/savescan.py -o obj/gb/localvars.s $objlist_save
 
 # Assemble
 for f in $genobjlist; do
   "${RGBDS}rgbasm" -o "obj/gb/$f.o" -h "obj/gb/$f.s"
 done
-for f in $objlist; do
+for f in $objlist $objlistfull $objlist32k; do
   "${RGBDS}rgbasm" -o "obj/gb/$f.o" "src/$f.s"
 done
-objlisto=$(printf "obj/gb/%s.o " $objlist $genobjlist)
 
 # Build ROM
-"${RGBDS}rgblink" -d -o $title.gb -n trnstress.sym -p 0xFF \
-  $objlisto
+"${RGBDS}rgblink" -d -o $title.gb -n $title.sym -p 0xFF \
+  $objlist_o
 "${RGBDS}rgbfix" -jvsl 0x33 -m "MBC5" -t "$inttitle" -k "P8" -p 0xFF $title.gb
+"${RGBDS}rgblink" -dt -o $title-32k.gb -n $title-32k.sym -p 0xFF \
+  $objlist32k_o
+"${RGBDS}rgbfix" -jvsl 0x33 -t "$inttitle" -k "P8" -p 0xFF $title-32k.gb

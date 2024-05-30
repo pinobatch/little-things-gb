@@ -1,3 +1,8 @@
+;
+; Machine initialization code for TRN Stress
+; Copyright 2024 Damian Yerrick
+; SPDX-License-Identifier: Zlib
+;
 include "src/hardware.inc"
 include "src/global.inc"
 

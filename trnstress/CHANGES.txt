@@ -1,0 +1,9 @@
+0.01 (2024-05-30)
+- Design title, credits, non-SGB error, and menu screens
+- Describe in words each of 15 scrambling methods
+- Program 15 scrambling methods, including a raster effect engine
+- Enhance border converter to reserve tiles $7F and $FF and respect
+  the embedded palette for images with fewer than 16 colors
+- Gather 5 out of 16 images
+- Program a frame timing test
+- Make 32K and full versions
