@@ -74,14 +74,15 @@ section "title_labels", ROM0
 credits_labels::
   db  16,   8, "Program by Damian Yerrick", LF
   db  24,  16, "pineight.com", LF
-  db  16,  24, "Cubby character based on a", LF
-  db  16,  32, "design by yoeynsf", LF
-  db  24,  40, "instagram.com/yoeynsf", LF
-  db  16,  48, "Other illustrations by", LF
-  db  16,  56, "John D. Batten, Peter Newell,", LF
-  db  16,  64, "Walter M. Lowney Co., J. S.", LF
-  db  16,  72, "Pughe, Randolph Caldecott,", LF
-  db  16,  80, "and [to be added]", LF
+  db  16,  24, "Fast 8-bit PRNG by foobles", LF
+  db  16,  32, "Cubby character based on a", LF
+  db  16,  40, "design by yoeynsf", LF
+  db  24,  48, "instagram.com/yoeynsf", LF
+  db  16,  56, "Other illustrations by", LF
+  db  16,  64, "John D. Batten, Peter Newell,", LF
+  db  16,  72, "Walter M. Lowney Co., J. S.", LF
+  db  16,  80, "Pughe, Randolph Caldecott,", LF
+  db  16,  88, "and [to be added]", LF
   db  16, 128, "B: Back   Start: Menu", 0
 
 copr_notice_labels::

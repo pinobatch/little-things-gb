@@ -9,6 +9,22 @@ include "src/global.inc"
 def NUM_SCRAMBLES equ 16
 export NUM_SCRAMBLES
 
+;;
+; Performs one iteration of an 8-bit pseudorandom number generator
+; (PRNG) by foobles.  It acts as a hybrid linear feedback shift
+; register (LFSR) and linear congruential generator (LCG) with
+; period 256.  Input and output in register A; sets flags like ADC.
+; If A < $80: Multiply by 2, XOR with $46, and add $EB
+; If A >= $80: Multiply by 2 and add $EC
+; <https://foobles.neocities.org/blog/2023-06-06/prng>
+macro foobles_prng_iter
+  add a
+  jr c, .no_eor
+    xor $46
+  .no_eor:
+  adc $eb
+endm
+
 section "Scramble_select", HRAM
 hScrambleToUse:: ds 1
 hRasterToUse:: ds 1
@@ -140,6 +156,9 @@ twobitnam_chr:
     bit 4, h
     jr z, .oddloop
 
+  ld de, $8800
+  call memtrash_2k_at_de
+
   ; Blank tile $FF
   ld hl, $8FF0
   xor a
@@ -157,12 +176,40 @@ twobitnam_chr:
     jr z, .namloop
   ret
 
+
+memtrash_9000:
+  ld de, $9000
+  fallthrough memtrash_2k_at_de
+
+memtrash_2k_at_de:
+  ld bc, $800
+  ld a, d
+  fallthrough memtrash
+
+;;
+; Fills BC bytes starting at DE with pseudorandom garbage.
+memtrash:
+  dec bc
+  inc b
+  inc c
+  .loop
+    foobles_prng_iter
+    xor b  ; temper with remaining byte count to reduce repetition
+    ld [de], a
+    xor b
+    inc de
+    dec c
+    jr nz, .loop
+    dec b
+    jr nz, .loop
+  ret
+
 ; 2bpp via BGP ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; For CHR_TRN, copy odd bytes of even tiles 15 bytes later, then
 ; clobber all even bytes.  For PCT_TRN, keep only colors 1, 4, and 5,
 ; and set the other colors to some value that stands out.
 
-def NONO_COLOR equ $7E00  ; R=31 G=0 B=0
+def NONO_COLOR equ $001F  ; R=31 G=0 B=0
 
 twobitbgp_name: db "2bpp via BGP", 0
 twobitbgp_chr:
@@ -186,16 +233,13 @@ twobitbgp_chr:
     bit 4, d  ; has $9001 been reached?
     jr z, .chrtileloop
 
-  ; Trash bit planes 1 and 3 with CRC8 output
+  ; Trash bit planes 1 and 3
   ld hl, $8001
   ld a, h
   .chrtrashloop:
     ld [hl+], a
     inc hl
-    add a
-    jr nc, .trash_nocarry
-      xor $07
-    .trash_nocarry:
+    foobles_prng_iter
     bit 4, h  ; has $9001 been reached?
     jr z, .chrtrashloop
 
@@ -210,7 +254,7 @@ twobitbgp_pct:
   ld bc, 4
   call memcpy
 
-  ; Trash the rest of the palette
+  ; Trash the rest of the palette by setting it to the no-no color.
   ld b, 48 - 4
   .set_nono_loop:
     ld a, low(NONO_COLOR)
@@ -269,9 +313,7 @@ blk21_proc:
   ld bc, $0800
   call memcpy
   ld d, $80
-  ld b, $08
-  ld h, b
-  jp memset
+  jp memtrash_2k_at_de
 
 ; Tilemap at $9C00 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; The main tilemap can be at $9800 or $9C00.  Set up for the latter. 
@@ -286,8 +328,7 @@ nam9c_proc:
   call memcpy
   ld d, $98
   ld b, $03
-  ld h, b
-  jp memset
+  jp memtrash
 
 ; Window tilemap ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; move right 32 pixels at Y=16 through 95 to window
