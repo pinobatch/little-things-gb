@@ -482,6 +482,7 @@ popslide_1to2bpp::
     ld a, e
     pop de
     halt
+    nop ; avoid halt bug in case IRQ landed in previous 4 instructions
     ld [hl+], a
     ld [hl+], a
     ld a, b
