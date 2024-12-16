@@ -40,8 +40,9 @@ The ROM must have enough blank space at the start and end:
   These hold the PNG's 33-byte header and the header of the chunk
   that contains the Game Boy program.  It's unlikely to work with
   most proprietary games from the commercial era (1989 through 2001).
-- If `rst $28` is used, the instruction at $0028 must be `ld l,l`
-  so that the `prGm` chunk can contain the entire program.
+- If `rst $28` is used, the instruction at $0028 must be a no-op
+  because the tool replaces it with `ld l, l` (opcode $6D), which
+  is the ASCII code for the last letter of chunk type `prGm`.
 - There must be enough unused space at the end of the ROM (detected
   as identical bytes) to hold the entire PNG image minus 25 bytes.
   If you have [OptiPNG], consider `optipng -strip all image.png`
@@ -63,10 +64,16 @@ Future possibilities
 I'm interested in seeing proofs of concept to add support for other
 consoles' ROM image formats.  Here are some exercises for the reader:
 
+**Game Boy:** The chunk type need not end in `m`.  It can be `v`,
+which encodes `halt`, or another lowercase letter from `a` to `z`,
+which encode other `ld` instructions.  Find practical uses for
+other such instructions as the first instruction of `rst $28`.
+
 **Super NES:** The program has to avoid enough of the last few banks
 as well as the first 41 bytes.  Fortunately, these bytes have no
-special meaning on a Super NES; have your linker configuration avoid
-them.  Then correct the SNES checksum instead of a GB checksum.
+special meaning on a Super NES, and it should be practical to reserve
+the space using the linker configuration.  Then correct the LoROM or
+HiROM checksum instead of a GB checksum.
 
 **Genesis:** The first 41 bytes overlap the reset vector (at $0005)
 and the handlers for the first few exceptions: bus error, address
@@ -82,9 +89,7 @@ width, height, and color that an attached image may have, as these
 may cause CRC32 values containing unsafe opcodes.  Trying to work
 around this by extending `IHDR`, as suggested by Maxim in the SMS
 Power community, fails because [libpng rejects oversize] `IHDR`
-chunks.  Furthermore, a ROM intended for 50-pin machines would need
-to use a mapper so that the `TMR SEGA` block can specify that the
-checksum applies only to the first 32 KiB.
+chunks.
 
 **NES:** Not possible; PNG header overlaps iNES header.
 
