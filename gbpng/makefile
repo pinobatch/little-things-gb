@@ -11,7 +11,7 @@
 
 # Used in the title of the zipfile and .gb executable
 title:=gbpng
-version:=0.01
+version:=0.03wip
 
 # Space-separated list of asm files without .z80 extension
 # (use a backslash to continue on the next line)
@@ -75,7 +75,7 @@ objlisto = $(foreach o,$(objlist),obj/gb/$(o).o)
 
 $(title).gb: $(objlisto)
 	$(RGBLINK) -p 0xFF -m$(title).map -n$(title).sym -o$@ $^
-	$(RGBFIX) -p 0xFF -v $@
+	$(RGBFIX) -p 0xFF -jvl $33 -k "P8" -t "HI SUKEY" $@
 
 $(title).gb.png: tools/pngify.py $(title).gb $(pngfile)
 	$(PY) $^ $@

@@ -1,3 +1,8 @@
+;
+; ROM header for Game Boy
+; Copyright 2018 Damian Yerrick
+; SPDX-License-Identifier: Zlib
+; 
   IF  !DEF(GB_INC)
 def GB_INC equ 1
 
@@ -10,11 +15,6 @@ def CHRRAM2 EQU $9000  ; BG tiles 0-127 if BG_CHR01 off
 def P1F_NONE     EQU $30
 def P1F_BUTTONS  EQU $10
 def P1F_DPAD     EQU $20
-
-def SGB_NONE EQU $00
-def SGB_SUPPORT EQU $03
-def REGION_J EQU $00
-def REGION_UE EQU $01
 
 ;;
 ; Syntax: drgb $FF9966 for color #FF9966
@@ -31,6 +31,4 @@ macro drgb
 def hLocals equ $FF80
 def locals_size equ 16
 
-
   ENDC
-

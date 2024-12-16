@@ -1,3 +1,13 @@
+Pre-0.03
+* make byte sum and CRC simultaneously correct by forging a CRC and
+  4 preceding bytes with a particular byte sum
+* allow building with out-of-path RGBDS
+* update to RGBDS 0.9
+* build the ROM header with RGBFIX
+* use SPDX license identifiers
+* README: add chunk types not ending in 'm' as a future direction
+  (suggested by ax6)
+
 0.02 (2023-03-23)
 * pad demo ROM with 0xFF instead of 0x00
 * update to RGBDS 0.6.1
