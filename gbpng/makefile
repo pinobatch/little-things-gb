@@ -81,10 +81,10 @@ $(title).gb.png: tools/pngify.py $(title).gb $(pngfile)
 	$(PY) $^ $@
 
 obj/gb/%.o: src/%.z80 src/hardware.inc src/global.inc
-	$(RGBASM) -h -o $@ $<
+	$(RGBASM) -o $@ $<
 
 obj/gb/%.o: obj/gb/%.z80
-	$(RGBASM) -h -o $@ $<
+	$(RGBASM) -o $@ $<
 
 # Files that will be included with incbin
 

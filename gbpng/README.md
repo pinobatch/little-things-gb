@@ -2,6 +2,8 @@ gbpng
 =====
 Embed a PNG image into a Game Boy ROM
 
+![Low-color-depth 3D render of Sukey, a girl with fused legs and a large paddle-shaped foot wearing a shirt dress](tilesets/Sukey.png)
+
 This tool takes a ROM compatible with Game Boy that meets certain
 criteria and combines it with a PNG image to make a "polyglot" file,
 which is simultaneously a valid ROM and a valid PNG image.  The ROM
@@ -10,7 +12,7 @@ long as the server doesn't reencode the image before serving it to
 the viewer, the user can run it in a Game Boy emulator.
 
 Building the demo
---------
+-----------------
 Install RGBDS, Python, and GNU Make.  Then at a terminal, type
 `make all` to build or `make run` to build and run.  For the latter,
 `GBEMU=sameboy make run` overrides the default emulator.
@@ -20,7 +22,7 @@ MSYS2, Cygwin, or a GNU/Linux distribution installed, you probably
 have Make and Coreutils.
 
 Though the example ROM displays the same pixels as the PNG embedded
-into it, this need not be the case.  The example code *does not*
+into it, this need not be the case.  This Game Boy program does not
 decode the PNG file.  The image is stored in two different
 compression formats: PNG and one the GB can decode time-efficiently.
 An easy change is to make them different pictures.  The `pngfile`
@@ -36,28 +38,23 @@ The ROM must have enough blank space at the start and end:
 
 - The first 40 bytes (`rst $00` through `rst $20`) must be unused.
   These hold the PNG's 33-byte header and the header of the chunk
-  that contains the Game Boy program.  Thus it's unlikely to work
-  with proprietary games from the commercial era (1989 through 2001).
+  that contains the Game Boy program.  It's unlikely to work with
+  most proprietary games from the commercial era (1989 through 2001).
 - If `rst $28` is used, the instruction at $0028 must be `ld l,l`
   so that the `prGm` chunk can contain the entire program.
 - There must be enough unused space at the end of the ROM (detected
-  as identical bytes) to hold the entire PNG image minus 29 bytes
-  (the PNG's header minus the header CRC).  If you have [OptiPNG],
-  consider `optipng -strip all image.png` to remove unnecessary
-  chunks from the image.
+  as identical bytes) to hold the entire PNG image minus 25 bytes.
+  If you have [OptiPNG], consider `optipng -strip all image.png`
+  to remove unnecessary chunks from the image.
 
 Once those are taken care of:
 
     tools/pngify.py gbfile pngfile outfile
 
-By default, the `prGm` chunk containing the Game Boy program has a
-correct global checksum at $014E in the Game Boy header to silence
-warnings in some Game Boy emulators.  This causes the CRC32 value to
-be incorrect, which may make the image unreadable in PNG decoders
-that reject an entire file for a single incorrect CRC32 value in
-an otherwise ignored chunk.  (Reports of picky decoders would be
-appreciated.)  To work around this, use `pngify.py --skip-global-sum`
-to prioritize the CRC32 over the GB header global checksum.
+`pngify.py` uses a bit of brute force to ensure that both the ROM's
+global byte sum (at $014E in the header) and the `prGm` chunk's CRC32
+value are consistent.  This way, neither Game Boy emulators nor
+pickier PNG parsers will emit a diagnostic.
 
 [OptiPNG]: https://optipng.sourceforge.net/
 
@@ -98,6 +95,6 @@ compressed logo.
 
 Legal
 -----
-Copyright 2018, 2023 Damian Yerrick.
+Copyright 2018, 2024 Damian Yerrick.
 
 This program is free software distributed under the zlib License.

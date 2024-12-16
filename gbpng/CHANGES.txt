@@ -1,2 +1,9 @@
+0.02 (2023-03-23)
+* pad demo ROM with 0xFF instead of 0x00
+* update to RGBDS 0.6.1
+* README: add intro, build instructions, spec for demo ROM's
+  displayed image, caveat about incorrect byte sum or CRC32,
+  and how the approach could apply to other platforms
+
 0.01 (2018-10-01)
 * initial release

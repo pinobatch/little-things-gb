@@ -263,7 +263,7 @@ load_nam::
   ret
 
 section "GBMONOPALETTE", ROM0, ALIGN[3]
-GBMONO_GREEN equ 0
+def GBMONO_GREEN equ 0
 gbmonopalette::
   if GBMONO_GREEN
   drgb $E8F840
