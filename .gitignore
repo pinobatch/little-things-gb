@@ -25,6 +25,7 @@
 */obj/gb/*.s
 */obj/gb/*.border
 */obj/gb/*sentinel
+*/build
 __pycache__
 zip.in
 ca83/tools/pb8
