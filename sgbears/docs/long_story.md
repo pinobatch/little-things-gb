@@ -15,8 +15,8 @@ disturbing the chairs and breaking Cubby's, disturbing the bed
 coverings.  They discovered the culprit lying in (you guessed it)
 Cubby's bed and chased her out.  After their nerves settled, Papa
 asked the others if he was too harsh.  Mama told Papa that she'd
-heard the story of Scrapefoot but never imagined she'd see it
-play out in her own house.
+told Cubby the story of Scrapefoot but never imagined she'd see it
+play out in their own house.
 
 A week later, the bears saw the girl in the park, and Cubby managed
 to approach and exchange apologies with the girl, who said she goes

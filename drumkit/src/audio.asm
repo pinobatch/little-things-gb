@@ -126,7 +126,7 @@ fx_closedhat:
 
 fx_openhat:
   db ENVF_DPAR|ENVF_PITCH|7, $44, $05
-  db ENVF_DPAR|ENVF_PITCH|14, $27, $05
+  db ENVF_DPAR|14, $27
   db $FF
 
 fx_kick:

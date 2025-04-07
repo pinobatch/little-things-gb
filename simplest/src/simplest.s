@@ -1,3 +1,7 @@
+; Simplest picture displayer for 8-bit Game Boy
+; Copyright 2025 Damian Yerrick
+; SPDX-License-Identifier: Zlib
+
 ; Subset of hardware.inc needed to load an image
 DEF _VRAM        EQU $8000 ; $8000->$9FFF
 DEF _VRAM8000    EQU _VRAM

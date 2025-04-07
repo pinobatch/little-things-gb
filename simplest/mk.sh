@@ -1,4 +1,7 @@
 #!/bin/sh
+# Simplest build script for simplest picture displayer
+# Copyright 2025 Damian Yerrick
+# SPDX-License-Identifier: Zlib
 set -e
 mkdir -p obj/gb
 rgbgfx -b 128 -c embedded -o obj/gb/simplest.2bpp -ut obj/gb/simplest.nam tilesets/simplest.png

@@ -12,3 +12,6 @@ input.  It should not use compression.  It should not use external
 tooling other than a shell script and the components of RGBDS.
 It should not use more than one assembly language source code file.
 
+Copyright 2025 Damian Yerrick  
+Source code license: zlib  
+Using an image by SECricket
