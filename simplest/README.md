@@ -1,6 +1,8 @@
 Simplest picture displayer
 ==========================
 
+![hello world / Simplest picture displayer by D. Yerrick / doodle of a boy with no legs wearing overalls and walking mittens](./tilesets/simplest.png)
+
 This program displays an image on the Game Boy in the conceptually
 simplest way.  It is not the most space- or time-efficient way.
 
@@ -14,4 +16,4 @@ It should not use more than one assembly language source code file.
 
 Copyright 2025 Damian Yerrick  
 Source code license: zlib  
-Using an image by SECricket
+Using a doodle by SECricket
