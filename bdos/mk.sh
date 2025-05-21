@@ -26,8 +26,8 @@ mkdir -p obj/gb
 for filename in $onebitlist; do
   rgbgfx -d 1 -o "obj/gb/$filename.1b" "tilesets/$filename.png"
 done
-"${RGBDS}rgbasm" -h -o "obj/gb/bdos.o" "src/bdos.z80"
-"${RGBDS}rgbasm" -h -o "obj/gb/$1.o" "src/$1.z80"
+"${RGBDS}rgbasm" -o "obj/gb/bdos.o" "src/bdos.z80"
+"${RGBDS}rgbasm" -o "obj/gb/$1.o" "src/$1.z80"
 "${RGBDS}rgblink" -o "$1.gb" -p 0xFF -m "$1.map" -n "$1.sym" "obj/gb/bdos.o" "obj/gb/$1.o"
 "${RGBDS}rgbfix" -jvt "$inttitle" -p 0xFF "$1.gb"
 

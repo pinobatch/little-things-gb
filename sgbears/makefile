@@ -45,10 +45,10 @@ $(PB8): $(TOOLSDIR)/pb8.c
 # Game Boy program part #############################################
 
 obj/gb/%.o: src/%.z80 src/hardware.inc
-	$(RGBASM) -h -o $@ $<
+	$(RGBASM) -o $@ $<
 
 obj/gb/%.o: obj/gb/%.z80
-	$(RGBASM) -h -o $@ $<
+	$(RGBASM) -o $@ $<
 
 obj/gb/main.o: \
   obj/gb/sgb-playmate.1b obj/gb/menutiles.1b obj/gb/credit.1b.pb16
@@ -63,7 +63,7 @@ obj/gb/%.2b: tilesets/%.png
 	$(RGBGFX) -o $@ $<
 
 obj/gb/%.h.1b: tilesets/%.png
-	$(RGBGFX) -d1 -h -o $@ $<
+	$(RGBGFX) -d1 -Z -o $@ $<
 
 obj/gb/%.1b: tilesets/%.png
 	$(RGBGFX) -d1 -o $@ $<
@@ -112,6 +112,6 @@ zip: $(title)-$(version).zip
 
 clean:
 	# Don't remove tools in common folder
-	-rm tools/pngtochr$(DOTEXE) tools/pb8$(DOTEXE)
-	-rm obj/gb/*.pal obj/gb/*.1b obj/gb/*.2b obj/gb/*.4b obj/gb/*.nam
-	-rm obj/gb/*.o obj/gb/*.pb16 obj/gb/*.pb8 obj/gb/*.z80
+	$(RM) tools/pngtochr$(DOTEXE) tools/pb8$(DOTEXE)
+	$(RM) obj/gb/*.pal obj/gb/*.1b obj/gb/*.2b obj/gb/*.4b obj/gb/*.nam
+	$(RM) obj/gb/*.o obj/gb/*.pb16 obj/gb/*.pb8 obj/gb/*.z80

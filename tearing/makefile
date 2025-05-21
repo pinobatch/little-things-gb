@@ -48,8 +48,8 @@ dist: zip
 zip: $(title)-$(version).zip
 
 clean:
-	-rm $(objdir)/*.o $(objdir)/*.2b $(objdir)/*.iu
-	-rm $(title).dbg $(title).sym
+	$(RM) $(objdir)/*.o $(objdir)/*.2b $(objdir)/*.iu
+	$(RM) $(title).dbg $(title).sym
 
 # incbins and other dependencies
 $(objdir)/main.o: \
@@ -74,7 +74,7 @@ $(objdir)/%16x16.2b: tilesets/%.png $(PNGTOCHR)
 
 # assembly
 $(objdir)/%.o: $(srcdir)/%.z80 $(srcdir)/hardware.inc
-	$(RGBASM) -h -Wall -o $@ $<
+	$(RGBASM) -Wall -o $@ $<
 
 # linking
 

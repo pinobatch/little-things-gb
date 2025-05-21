@@ -447,7 +447,7 @@ draw_regs:
     jr nz, .not_decimal
       ld a, [hl+]
       ld c, a
-      ld a, [c]
+      ldh a, [c]
       call bcd8bit_baa
       ld c, a
       ld a, b

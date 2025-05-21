@@ -50,7 +50,7 @@ python3 tools/savescan.py -o obj/gb/localvars.s $objlist_save
 
 # Assemble
 for f in $genobjlist; do
-  "${RGBDS}rgbasm" -o "obj/gb/$f.o" -h "obj/gb/$f.s"
+  "${RGBDS}rgbasm" -o "obj/gb/$f.o" "obj/gb/$f.s"
 done
 for f in $objlist $objlistfull $objlist32k; do
   "${RGBDS}rgbasm" -o "obj/gb/$f.o" "src/$f.s"

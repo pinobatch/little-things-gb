@@ -47,8 +47,8 @@ run: $(title).gb
 all: $(title).gb
 
 clean:
-	-rm obj/gb/*.z80 obj/gb/*.o obj/gb/*.chrgb obj/gb/*.pb16
-	-rm obj/gb/*.nam obj/gb/*.chr1
+	$(RM) obj/gb/*.z80 obj/gb/*.o obj/gb/*.chrgb obj/gb/*.pb16
+	$(RM) obj/gb/*.nam obj/gb/*.chr1
 
 # Packaging
 
@@ -86,10 +86,10 @@ $(title).gb: $(objlisto)
 	$(RGBFIX) -p 0xFF -v $@
 
 obj/gb/%.o: src/%.z80 src/hardware.inc src/global.inc
-	$(RGBASM) -h -o $@ $<
+	$(RGBASM) -o $@ $<
 
 obj/gb/%.o: obj/gb/%.z80
-	$(RGBASM) -h -o $@ $<
+	$(RGBASM) -o $@ $<
 
 # Files that will be included with incbin
 

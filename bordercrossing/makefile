@@ -36,7 +36,7 @@ run: $(romname).gb
 
 clean:
 	@mkdir -p $(objdir)
-	-rm $(objdir)/*
+	$(RM) $(objdir)/*
 	
 # Border conversion
 $(objdir)/%.border: tilesets/%.png
@@ -69,9 +69,9 @@ $(objdir)/%.pb16: $(objdir)/%
 
 $(objdir)/%.o: src/%.z80 src/hardware.inc
 	@mkdir -p $(objdir)
-	$(RGBASM) -h -o $@ $<
+	$(RGBASM) -o $@ $<
 $(objdir)/%.o: $(objdir)/%.z80
-	$(RGBASM) -h -o $@ $<
+	$(RGBASM) -o $@ $<
 
 # Incbin dependencies
 $(objdir)/main.o: $(objdir)/bootborder.border
