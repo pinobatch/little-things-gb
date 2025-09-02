@@ -453,7 +453,7 @@ draw_regs:
       ld a, b
       and $03
       jr z, .no_hundreds
-        or "0"
+        or '0'
         ld [de], a
         inc e
         ld a, c
@@ -467,13 +467,13 @@ draw_regs:
         ld b, a
         swap a
         and $0F
-        or "0"
+        or '0'
         ld [de], a
         ld a, b
       .no_tens:
       inc e
       and $0F
-      or "0"
+      or '0'
       ld [de], a
       jr .loop
     .not_decimal:
@@ -518,7 +518,7 @@ draw_24bit_to_row_c:
   push hl  ; save low 4 digits of binary to decimal result
 
   ; Print digits
-  ld l, " "  ; L becomes "0" after printing a nonzero digit 
+  ld l, ' '  ; L becomes '0' after printing a nonzero digit 
   ld a, b
   ld h, c
   call .pr2dig
@@ -536,7 +536,7 @@ draw_24bit_to_row_c:
   ld b, a
   ld a, h
   and $0F
-  or "0"
+  or '0'
   ld c, a
   jr hblank_put_bc
 
@@ -545,14 +545,14 @@ draw_24bit_to_row_c:
   swap a
   and $0F
   jr z, .pr2dig_hi_zero
-    ld l, "0"
+    ld l, '0'
   .pr2dig_hi_zero:
   or l
   ld b, a
   ld a, c
   and $0F
   jr z, .pr2dig_lo_zero
-    ld l, "0"
+    ld l, '0'
   .pr2dig_lo_zero:
   or l
   ld c, a
@@ -607,7 +607,7 @@ seek_vram_row_c:
 draw_no_press_to_row_c:
   call seek_vram_row_c
   set 2, e
-  lb bc, " ", " "
+  lb bc, ' ', ' '
   ld l, 7
   .loop:
     call hblank_put_bc
@@ -762,7 +762,7 @@ draw_press_deltas:
     call bcd24bit
     pop hl  ; HL = VRAM destination; CDE = 6 digits
     ld b, c
-    ld c, " "
+    ld c, ' '
     ld a, b
     swap a
     call draw_agcd_index_a.pr1dig
@@ -779,15 +779,15 @@ draw_press_deltas:
     ld a, b
     and $03
     ld d, a
-    ld c, " "
+    ld c, ' '
     call draw_agcd_index_a.prde3
-    ld a, "."
+    ld a, '.'
     ld [hl+], a
     ld a, [help_line_buffer+4]
-    or "0"
+    or '0'
     ld [hl+], a
     ld a, [help_line_buffer+5]
-    or "0"
+    or '0'
     ld [hl+], a
 
     pop bc
@@ -819,7 +819,7 @@ draw_agcd_index_a:
 
   call bcd24bit
   pop hl
-  ld c, " "
+  ld c, ' '
 .prde:
   ld a, d
   swap a
@@ -831,11 +831,11 @@ draw_agcd_index_a:
   swap a
   call .pr1dig
   ld a, e
-  ld c, "0"
+  ld c, '0'
 .pr1dig:
   and $0F
   jr z, .nonzero
-    ld c, "0"
+    ld c, '0'
   .nonzero:
   or c
   ld [hl+], a

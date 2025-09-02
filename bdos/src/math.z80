@@ -47,7 +47,7 @@ sqrt_test:
   ld h, 0
 print_hl_decimal_nl:
   call print_hl_decimal
-  ld e, "\n"
+  ld e, '\n'
   ld c, 2
   jp bdos
 

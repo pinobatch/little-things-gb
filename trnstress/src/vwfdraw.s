@@ -42,7 +42,7 @@ export FIRST_PRINTABLE_CU
 ; add width: 12, buffer overflow test: 5
 ;
 ; Further work:
-; not drawing space (" ") at all
+; not drawing space (' ') at all
 ; skipping shifting for $00 slivers
 
 section "vwfPutTile", ROM0, align[3]  ; log(CHAR_BIT) to not cross page
@@ -166,7 +166,7 @@ vwfPuts::
   ld c,a
   push hl
   push bc
-  cp " "  ; Optimization: Don't draw glyph for space character
+  cp ' '  ; Optimization: Don't draw glyph for space character
   call nz, vwfPutTile
   pop bc
   pop hl

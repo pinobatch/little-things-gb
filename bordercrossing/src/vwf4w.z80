@@ -188,7 +188,7 @@ Vwf16DrawGlyph::
 ; @return B: new X position; HL: pointer to terminator
 Vwf16DrawStr::
   ld a, [hl]
-  cp " "
+  cp ' '
   ret c
   inc hl
   push hl

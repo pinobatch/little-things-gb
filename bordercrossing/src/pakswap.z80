@@ -181,7 +181,7 @@ wait_for_pakswap_wram:
   ldh a, [hVblanks]
   and $10
   cp 1
-  ld a, low(("." - " ") * 2 + $C0)
+  ld a, low(('.' - ' ') * 2 + $C0)
   adc 0
   ld [$99F3], a
 

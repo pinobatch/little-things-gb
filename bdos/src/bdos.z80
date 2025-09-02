@@ -263,7 +263,7 @@ bdos_newline:
   add hl, hl
   add hl, hl
   ld c, 20/2
-  ld e, " "
+  ld e, ' '
   xor a
   .clreol_loop:
     .statwait:
@@ -293,7 +293,7 @@ bdos_cls:
   ldh [rSCY], a
   ld hl, _SCRN0
   ld e, a
-  ld a, " "
+  ld a, ' '
   .loop
     ld [hl+], a
     ld [hl+], a

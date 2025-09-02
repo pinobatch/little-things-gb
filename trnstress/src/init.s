@@ -6,7 +6,9 @@
 include "src/hardware.inc"
 include "src/global.inc"
 
-def CAPABILITY_ZEROTRAP equ "Z"
+; If this value is written to hCapability, display an error message
+; about the emulator not being able to jr from RST-land to HRAM
+def CAPABILITY_ZEROTRAP equ 'Z'
 export CAPABILITY_ZEROTRAP
 
 section "hState", HRAM

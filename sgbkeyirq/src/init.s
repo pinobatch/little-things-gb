@@ -149,7 +149,7 @@ section "draw_labels", ROM0
 ; Draw labels
 cls_draw_labels::
   push hl
-  ld h, " "
+  ld h, ' '
   call clear_scrn0_to_h
   pop hl
 draw_labels::
@@ -161,7 +161,7 @@ draw_labels::
     ld a, [hl+]
     or a
     ret z
-    cp " "
+    cp ' '
     jr c, draw_labels
     ld [de], a
     inc e
