@@ -41,8 +41,8 @@ dist: zip
 zip: $(title)-$(version).zip
 
 clean:
-	-rm tools/pb8$(DOTEXE) $(objdir)/*.o $(objdir)/*.chr* $(objdir)/*.pb8
-	-rm $(title).dbg $(title).sym
+	$(RM) tools/pb8$(DOTEXE) $(objdir)/*.o $(objdir)/*.chr* $(objdir)/*.pb8
+	$(RM) $(title).dbg $(title).sym
 
 # incbins and other dependencies
 $(objdir)/main.o: $(objdir)/gsmplay8x15-16.chr1.pb8

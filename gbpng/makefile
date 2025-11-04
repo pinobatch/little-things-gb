@@ -46,7 +46,7 @@ run: $(title).gb.png
 all: $(title).gb.png
 
 clean:
-	-rm obj/gb/*.z80 obj/gb/*.o obj/gb/*.iu obj/gb/*.chrgb
+	$(RM) obj/gb/*.z80 obj/gb/*.o obj/gb/*.iu obj/gb/*.chrgb
 
 # Packaging
 

@@ -38,7 +38,7 @@ PNGTOCHR := ../common/tools/pngtochr$(DOTEXE)
 .PHONY: ggrun run all dist zip clean
 
 ggrun: $(title).gg $(title).sym
-	"$(HOME)/develop/emulators/meka/meka/meka" $<
+	emulicious $<
 
 run: $(title).gb $(title).sym
 	sameboy $<
@@ -50,9 +50,9 @@ dist: zip
 zip: $(title)-$(version).zip
 
 clean:
-	-rm $(gbobjdir)/*.o $(gbobjdir)/*.2b $(gbobjdir)/*.iu
-	-rm $(ggobjdir)/*.o $(ggobjdir)/*.4b $(ggobjdir)/*.nam
-	-rm $(title).dbg $(title).sym
+	$(RM) $(gbobjdir)/*.o $(gbobjdir)/*.2b $(gbobjdir)/*.iu
+	$(RM) $(ggobjdir)/*.o $(ggobjdir)/*.4b $(ggobjdir)/*.nam
+	$(RM) $(title).dbg $(title).sym
 
 # incbins and other dependencies
 $(gbobjdir)/gbmain.o: $(gbobjdir)/NoSuchThingAsNintendo.iu
