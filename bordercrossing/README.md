@@ -28,12 +28,16 @@ turn off the Control Deck and try again.
 3. Press the A Button to preview the border.  To view another border,
    press the B Button to show the list.
 4. Carefully remove the flash cartridge from your Super Game Boy's
-   Game Pak slot and firmly insert another game.
+   Game Pak slot and firmly insert another Game Pak.
 5. Some games automatically start when inserted.  Other games show a
    title at the bottom of the screen.  Press the A Button to play.
 
 A game with SGB enhancement will run without enhancement, so that it
 does not overwrite your chosen border.
+
+**Caution:** In September 2026, one user reported about a 30 percent
+chance of loss of saved data when swapping Game Paks.  Make sure your
+Game Pak's edge connector is clean and that it is inserted straight.
 
 How to build
 ------------
