@@ -16,6 +16,7 @@ borders := bootborder \
 objs := main title listpicker pakswap sgb pads ppuclear vwf4w  \
   unpb16 popslide fink borderdata
 objdir := obj/gb
+objdir_snes := obj/snes
 
 PY :=
 GBEMU ?= sameboy
@@ -29,6 +30,9 @@ RGBLINK := $(RGBDS)rgblink
 RGBGFX  := $(RGBDS)rgbgfx
 RGBFIX  := $(RGBDS)rgbfix
 
+AS65 := ca65
+LD65 := ld65
+
 all: $(romname).gb
 
 run: $(romname).gb
@@ -36,8 +40,18 @@ run: $(romname).gb
 
 clean:
 	@mkdir -p $(objdir)
+	@mkdir -p $(objdir_snes)
 	$(RM) $(objdir)/*
-	
+
+# Assemble the SNES payload using ca65
+$(objdir_snes)/snespayload.bin: src/snesconfig.ini $(objdir_snes)/snespayload.o
+	@mkdir -p $(objdir_snes)
+	$(LD65) -o $@ -C $^
+
+$(objdir_snes)/snespayload.o: src/snespayload.s src/hardware.inc
+	@mkdir -p $(objdir_snes)
+	$(AS65) -o $@ $<
+
 # Border conversion
 $(objdir)/%.border: tilesets/%.png
 	@mkdir -p $(objdir)
@@ -79,6 +93,7 @@ $(objdir)/borderdata.o: $(foreach o,$(borders),$(objdir)/$(o).border)
 $(objdir)/title.o: $(objdir)/titlepic.2bpp.pb16 $(objdir)/titlepic.nam
 $(objdir)/pakswap.o: \
   $(objdir)/finkmono.2bpp.pb16 $(objdir)/carttypeicons.2bpp.pb16
+$(objdir)/sgb.o: $(objdir_snes)/snespayload.bin
 
 # Linking
 $(objdir)/$(romname).gb.sentinel: $(foreach o,$(objs),$(objdir)/$(o).o)
