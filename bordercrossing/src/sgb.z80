@@ -329,3 +329,92 @@ sgb_send_trn_ab::
   ld a, l
   call sgb_send_ab
   jp lcd_off
+
+sgb_send_payload::
+  ; Prefill initial values in the data buffer.
+  ld hl, cmd_data_snd_preamble
+  ld de, help_line_buffer
+  ld bc, cmd_data_snd_preamble.end-cmd_data_snd_preamble
+  call memcpy
+
+  ; Here we assume the payload will never exceed 255 bytes. (Reasonable assumption for this use case.)
+  ld a, snes_payload.end-snes_payload
+  ldh [hPayloadCtr], a
+
+  ld hl, snes_payload
+
+.send_loop
+  ; Check for bytes left to transfer.
+  ldh a, [hPayloadCtr]
+  or a
+  jr z, .transfer_done
+  ld bc, 11
+  sub c
+  ldh [hPayloadCtr], a
+  jr nc,.transfer_11_bytes
+  ; Special case for the last transfer round if the value underflowed when subing.
+  add c ; Add back 11 to restore the underflow and get the remaining length.
+  ld c, a ; This is the number of bytes to copy.
+  xor a
+  ldh [hPayloadCtr], a ; Write back 0 to be detected in the enxty round.
+.transfer_11_bytes
+
+  ld de, help_line_buffer + 4 ; Points to the length parameter
+  ld a, c
+  ld [de], a
+  inc de ; Point de to where the data starts.
+
+  ; Everything is set up to copy the data.
+  call memcpy
+
+  ; Preserve hl because it's clobbered by the transfer.
+  push hl 
+  ld hl, help_line_buffer
+  call sgb_send
+  pop hl
+
+  ; Forward the write position in the SGB packet.
+  ; We make two assumptions here:
+  ; 1) The total length of the payload is <256 bytes big.
+  ; 2) It's ok to leave an incorrect next position after the last transfer.
+  ld a, [help_line_buffer+1]
+  add 11
+  ld [help_line_buffer+1], a
+  jr .send_loop
+.transfer_done
+  ret
+
+; Call the SGB payload. Normally this would not return, since the payload would hold the CPU in reset.
+; 
+sgb_call_payload::
+  di
+  ld hl, cmd_jump_payload
+  call sgb_send
+.el jr .el
+
+
+cmd_data_snd_preamble::
+  db  $0f<<3|1  ; DATA_SND, fixed length 1
+  dw  $1800   ; Destination
+  db  0   ; Bank
+.end
+
+cmd_jump_payload::
+  db  $12<<3|1  ; JUMP, fixed length 1
+  dw  $1800   ; Jump address
+  db  0   ; Jump bank
+  dw  $1800   ; NMI address
+  db  0   ; NMI bank
+  ; Extra bytes
+  ds  16-7, 0
+
+
+
+snes_payload::
+  incbin "obj/snes/snespayload.bin"
+.end
+
+assert snes_payload.end-snes_payload < 256
+
+section "HVARS SGB", HRAM
+  hPayloadCtr:: ds 1

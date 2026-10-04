@@ -72,6 +72,10 @@ wait_for_pakswap::
   ld b, 128 + 16
   call pb16_unpack_block
 
+  ; 
+  call sgb_send_payload
+
+
   ; Load Pak Swap code into HRAM
   ld hl, pakswap_hram_LOAD
   ld de, pakswap_hram_RUN
@@ -152,7 +156,8 @@ wait_for_pakswap_tail:
 .hAndInstruction:
   and PADF_START|PADF_A|PADF_B
   jr z, .loop
-  jp pakswap_handle_exit
+  jp sgb_call_payload
+
 
 pakswap_hram_RUN_end:
 endl
